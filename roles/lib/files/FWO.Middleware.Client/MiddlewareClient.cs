@@ -1,4 +1,5 @@
 using FWO.Api.Client;
+using FWO.Data.Ai;
 using FWO.Data.Middleware;
 using RestSharp;
 
@@ -303,6 +304,104 @@ namespace FWO.Middleware.Client
         {
             RestRequest request = new($"Compliance/ComplianceCheck/Status/{jobId}", Method.Get);
             return await restClient.ExecuteAsync<ComplianceCheckJobStatus>(request);
+        }
+
+        public async Task<RestResponse<AiSettings>> GetAiSettings()
+        {
+            RestRequest request = new("Ai/Settings", Method.Get);
+            return await restClient.ExecuteAsync<AiSettings>(request);
+        }
+
+        public async Task<RestResponse<AiAssistantSettings>> GetAiAssistantSettings()
+        {
+            RestRequest request = new("Ai/Assistant/Settings", Method.Get);
+            return await restClient.ExecuteAsync<AiAssistantSettings>(request);
+        }
+
+        public async Task<RestResponse<AiSettings>> SaveAiSettings(AiSettings settings)
+        {
+            RestRequest request = new("Ai/Settings", Method.Put);
+            request.AddJsonBody(settings);
+            return await restClient.ExecuteAsync<AiSettings>(request);
+        }
+
+        public async Task<RestResponse<AiOperationResult>> TestAiProvider(AiConnectionTestParameters parameters)
+        {
+            RestRequest request = new("Ai/Providers/Test", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<AiOperationResult>(request);
+        }
+
+        public async Task<RestResponse<AiOperationResult>> TestAiModel(AiModelTestParameters parameters)
+        {
+            RestRequest request = new("Ai/Models/Test", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<AiOperationResult>(request);
+        }
+
+        public async Task<RestResponse<List<AiSession>>> GetAiSessions()
+        {
+            RestRequest request = new("Ai/Sessions", Method.Get);
+            return await restClient.ExecuteAsync<List<AiSession>>(request);
+        }
+
+        public async Task<RestResponse<AiSession>> GetAiSession(long id)
+        {
+            RestRequest request = new($"Ai/Sessions/{id}", Method.Get);
+            return await restClient.ExecuteAsync<AiSession>(request);
+        }
+
+        public async Task<RestResponse<List<AiChatMessage>>> GetAiSessionMessages(long id)
+        {
+            RestRequest request = new($"Ai/Sessions/{id}/Messages", Method.Get);
+            return await restClient.ExecuteAsync<List<AiChatMessage>>(request);
+        }
+
+        public async Task<RestResponse<AiSession>> CreateAiSession(AiCreateSessionParameters parameters)
+        {
+            RestRequest request = new("Ai/Sessions", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<AiSession>(request);
+        }
+
+        public async Task<RestResponse<bool>> RenameAiSession(long id, AiUpdateSessionParameters parameters)
+        {
+            RestRequest request = new($"Ai/Sessions/{id}", Method.Patch);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<bool>(request);
+        }
+
+        public async Task<RestResponse<bool>> DeleteAiSession(long id)
+        {
+            RestRequest request = new($"Ai/Sessions/{id}", Method.Delete);
+            return await restClient.ExecuteAsync<bool>(request);
+        }
+
+        public async Task<RestResponse<AiOllamaModelsResponse>> GetOllamaModels()
+        {
+            RestRequest request = new("Ai/Ollama/Models", Method.Get);
+            return await restClient.ExecuteAsync<AiOllamaModelsResponse>(request);
+        }
+
+        public async Task<RestResponse<AiOperationResult>> DownloadOllamaModel(AiOllamaModelParameters parameters)
+        {
+            RestRequest request = new("Ai/Ollama/Models/Pull", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<AiOperationResult>(request);
+        }
+
+        public async Task<RestResponse<AiOperationResult>> CancelDownloadOllamaModel(AiOllamaModelParameters parameters)
+        {
+            RestRequest request = new("Ai/Ollama/Models/Cancel", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<AiOperationResult>(request);
+        }
+
+        public async Task<RestResponse<AiOperationResult>> DeleteOllamaModel(AiOllamaModelParameters parameters)
+        {
+            RestRequest request = new("Ai/Ollama/Models/Delete", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<AiOperationResult>(request);
         }
 
         /// <summary>

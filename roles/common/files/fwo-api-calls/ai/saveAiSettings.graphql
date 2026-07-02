@@ -1,0 +1,14 @@
+mutation saveAiSettings($configItems: [config_insert_input!]!, $keepProviderIds: [bigint!]!, $providers: [ai_provider_insert_input!]!) {
+  insert_config(objects: $configItems, on_conflict: {constraint: config_pkey, update_columns: [config_value]}) {
+    affected_rows
+  }
+  delete_ai_model(where: {}) {
+    affected_rows
+  }
+  delete_ai_provider(where: {id: {_nin: $keepProviderIds}}) {
+    affected_rows
+  }
+  insert_ai_provider(objects: $providers, on_conflict: {constraint: ai_provider_pkey, update_columns: [kind, display_name, endpoint_url, api_key_env_variable, timeout_seconds, max_retries, enabled]}) {
+    affected_rows
+  }
+}

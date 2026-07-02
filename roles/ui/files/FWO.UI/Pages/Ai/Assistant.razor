@@ -1,0 +1,587 @@
+@page "/assistant"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using FWO.Config.Api.Data
+@using FWO.Config.File
+@using FWO.Middleware.Client
+@using FWO.Services
+@using FWO.Ui.Services
+@using Microsoft.Agents.AI.AGUI
+@using Microsoft.Extensions.AI
+@using System.Net.Http.Headers
+
+@inject MiddlewareClient MiddlewareClient
+@inject UserConfig userConfig
+@inject TokenService TokenService
+@inject ApiConnection apiConnection
+
+@implements IDisposable
+
+<div class="assistant-page">
+    <div class="assistant-shell">
+        <aside class="assistant-sidebar">
+            <div class="assistant-brand">
+                <span class="@Icons.UiMessages assistant-brand-icon"></span>
+                <div>
+                    <div class="assistant-eyebrow">@(userConfig.GetText("assistant"))</div>
+                    <h2>@(userConfig.GetText("assistant_sessions"))</h2>
+                </div>
+            </div>
+            <div class="assistant-sidebar-actions">
+                <button class="btn btn-sm btn-primary" @onclick="CreateSession" disabled="@IsActive">
+                    <span class="@Icons.Add"></span> @(userConfig.GetText("new_session"))
+                </button>
+                <button class="btn btn-sm btn-outline-secondary assistant-icon-button" title="@userConfig.GetText("refresh")" @onclick="LoadSessions" disabled="@IsActive">
+                    <span class="@Icons.Refresh"></span>
+                </button>
+            </div>
+            <div class="assistant-session-list">
+                @if (Sessions.Count == 0)
+                {
+                    <div class="assistant-empty-state">@(userConfig.GetText("no_sessions"))</div>
+                }
+                @foreach (AiSession session in Sessions)
+                {
+                    <button class="assistant-session-item @(IsCurrentSession(session) ? "active" : "")" @onclick="() => OpenSession(session.Id)" disabled="@IsActive">
+                        <span class="@Icons.UiMessages"></span>
+                        <span class="assistant-session-name">@session.Name</span>
+                    </button>
+                }
+            </div>
+        </aside>
+
+        <section class="assistant-main">
+            <div class="assistant-toolbar">
+                <div class="assistant-title-group">
+                    <div class="assistant-eyebrow">@(userConfig.GetText("model"))</div>
+                    <select class="form-select form-select-sm assistant-model-select" @bind="SelectedModelSelectionId" @bind:after="PersistSelectedModel" disabled="@(IsActive || CurrentSession != null)">
+                        <option value="">@(userConfig.GetText("choose_model"))</option>
+                        @foreach (AiModelConfig model in EnabledModels)
+                        {
+                            <option value="@model.SelectionId">@model.ProviderDisplayName - @model.DisplayName (@model.ModelId)</option>
+                        }
+                    </select>
+                </div>
+                @if (CurrentSession != null)
+                {
+                    <div class="assistant-session-tools">
+                        <input class="form-control form-control-sm assistant-name-input" @bind="SessionName" disabled="@IsActive" />
+                        <button class="btn btn-sm btn-outline-primary" title="@userConfig.GetText("edit")" @onclick="RenameCurrentSession" disabled="@IsActive">
+                            <span class="@Icons.Edit"></span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" title="@userConfig.GetText("delete")" @onclick="RequestDeleteSession" disabled="@IsActive">
+                            <span class="@Icons.Delete"></span>
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <div class="assistant-chat-panel">
+                @if (CurrentSession == null)
+                {
+                    <div class="assistant-start-state">
+                        <span class="@Icons.UiMessages assistant-start-icon"></span>
+                        <h3>@(userConfig.GetText("assistant_ready"))</h3>
+                        <p>@(userConfig.GetText("new_session"))</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (AiChatMessage message in Messages)
+                    {
+                        <div class="assistant-message @(message.Role == AiMessageRole.User.ToString() ? "user-message" : "assistant-message-output")">
+                            <div class="assistant-message-label">@MessageLabel(message.Role)</div>
+                            @if (message.Role == AiMessageRole.User.ToString())
+                            {
+                                <div class="assistant-message-bubble">
+                                    <pre>@message.Content</pre>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="assistant-message-bubble ai-markdown">
+                                    @RenderMarkdown(message.Content)
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(StreamingOutput))
+                    {
+                        <div class="assistant-message assistant-message-output">
+                            <div class="assistant-message-label">@(userConfig.GetText("assistant_output"))</div>
+                            <div class="assistant-message-bubble ai-markdown">@RenderMarkdown(StreamingOutput)</div>
+                        </div>
+                    }
+                    @if (IsActive)
+                    {
+                        <div class="assistant-running-state">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <span>@(userConfig.GetText("active"))</span>
+                        </div>
+                    }
+                }
+                @if (!string.IsNullOrWhiteSpace(RunError))
+                {
+                    <div class="alert alert-warning assistant-run-error">
+                        <div class="fw-semibold"><span class="@Icons.Warning"></span> @(userConfig.GetText("assistant_error"))</div>
+                        @if (!string.IsNullOrWhiteSpace(LastPrompt) && !IsActive)
+                        {
+                            <button class="btn btn-sm btn-warning mt-2" @onclick="RetryLastPrompt">
+                                <span class="@Icons.Refresh"></span> @(userConfig.GetText("retry"))
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="assistant-composer">
+                <textarea class="form-control" rows="3" @bind="Prompt" @bind:event="oninput" @onkeydown="HandleKeyDown" disabled="@IsActive"></textarea>
+                @if (IsActive)
+                {
+                    <button class="btn btn-warning assistant-send-button" @onclick="() => RunCancellation?.Cancel()">
+                        <span class="@Icons.Cancel"></span> @(userConfig.GetText("cancel"))
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-primary assistant-send-button" @onclick="SendMessage" disabled="@string.IsNullOrWhiteSpace(Prompt)">
+                        <span class="@Icons.Enter"></span> @(userConfig.GetText("send"))
+                    </button>
+                }
+            </div>
+        </section>
+    </div>
+</div>
+
+<ConfirmDelete @bind-Display="DeleteSessionMode" PerformAction="DeleteCurrentSession" Title="@userConfig.GetText("delete_session")"
+    DeleteMessage="@DeleteSessionMessage" AllowedRoles="" />
+
+@code {
+    [CascadingParameter]
+    private Action<Exception?, string, string, bool> DisplayMessageInUi { get; set; } = DefaultInit.DoNothing;
+
+    private List<AiSession> Sessions { get; set; } = [];
+    private AiSession? CurrentSession { get; set; }
+    private List<AiChatMessage> Messages { get; set; } = [];
+    private AiAssistantSettings Settings { get; set; } = new();
+    private string SelectedModelSelectionId { get; set; } = "";
+    private string SessionName { get; set; } = "";
+    private string Prompt { get; set; } = "";
+    private string LastPrompt { get; set; } = "";
+    private string StreamingOutput { get; set; } = "";
+    private string RunError { get; set; } = "";
+    private bool DeleteSessionMode { get; set; }
+    private string DeleteSessionMessage { get; set; } = "";
+    private bool IsActive { get; set; }
+    private CancellationTokenSource? RunCancellation { get; set; }
+    private bool IsDisposed { get; set; }
+
+    private List<AiModelConfig> EnabledModels => Settings.EnabledModels;
+
+    private bool IsCurrentSession(AiSession session)
+    {
+        return CurrentSession?.Id == session.Id;
+    }
+
+    /// <summary>
+    /// Picks the model dropdown's initial value: the user's remembered model when it is still
+    /// enabled, otherwise the global initial model, otherwise the first enabled model.
+    /// </summary>
+    private string PickInitialModel()
+    {
+        string? userSelection = FindEnabledSelectionId(userConfig.AiLastModelId);
+        if (!string.IsNullOrWhiteSpace(userSelection))
+        {
+            return userSelection;
+        }
+        string? initialSelection = FindEnabledSelectionId(Settings.InitialModelId);
+        if (!string.IsNullOrWhiteSpace(initialSelection))
+        {
+            return initialSelection;
+        }
+        return EnabledModels.FirstOrDefault()?.SelectionId ?? "";
+    }
+
+    private string? FindEnabledSelectionId(string? selectionId)
+    {
+        return EnabledModels.FirstOrDefault(model => model.SelectionId == selectionId)?.SelectionId
+            ?? EnabledModels.FirstOrDefault(model => model.ModelId == selectionId)?.SelectionId;
+    }
+
+    /// <summary>
+    /// Persists the user's model selection as a per-user setting so it is restored on the next visit.
+    /// </summary>
+    private async Task PersistSelectedModel()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedModelSelectionId) || SelectedModelSelectionId == userConfig.AiLastModelId)
+        {
+            return;
+        }
+        try
+        {
+            ConfigData editedConfig = (ConfigData)userConfig.Clone();
+            editedConfig.AiLastModelId = SelectedModelSelectionId;
+            await userConfig.WriteToDatabase(editedConfig, apiConnection);
+        }
+        catch (Exception exception)
+        {
+            ShowAssistantError(exception.Message, exception);
+        }
+    }
+
+    /// <summary>
+    /// Converts assistant Markdown to Blazor markup with raw HTML and URL links disabled.
+    /// </summary>
+    private static MarkupString RenderMarkdown(string? markdown)
+    {
+        return AssistantMarkdownRenderer.Render(markdown);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+        await LoadSessions();
+    }
+
+    private async Task LoadSettings()
+    {
+        try
+        {
+            RestSharp.RestResponse<AiAssistantSettings> response = await MiddlewareClient.GetAiAssistantSettings();
+            if (response.IsSuccessful && response.Data != null)
+            {
+                Settings = response.Data;
+                SelectedModelSelectionId = PickInitialModel();
+            }
+            else
+            {
+                ShowAssistantError(GetResponseError(response));
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowAssistantError(exception.Message, exception);
+        }
+    }
+
+    private async Task LoadSessions()
+    {
+        try
+        {
+            RestSharp.RestResponse<List<AiSession>> response = await MiddlewareClient.GetAiSessions();
+            if (response.IsSuccessful && response.Data != null)
+            {
+                Sessions = response.Data;
+            }
+            else
+            {
+                ShowAssistantError(GetResponseError(response));
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowAssistantError(exception.Message, exception);
+        }
+    }
+
+    private async Task LoadMessages()
+    {
+        if (CurrentSession == null)
+        {
+            Messages = [];
+            return;
+        }
+        try
+        {
+            RestSharp.RestResponse<List<AiChatMessage>> response = await MiddlewareClient.GetAiSessionMessages(CurrentSession.Id);
+            if (response.IsSuccessful && response.Data != null)
+            {
+                Messages = response.Data;
+            }
+            else
+            {
+                Messages = [];
+                ShowAssistantError(GetResponseError(response));
+            }
+        }
+        catch (Exception exception)
+        {
+            Messages = [];
+            ShowAssistantError(exception.Message, exception);
+        }
+    }
+
+    private async Task CreateSession()
+    {
+        try
+        {
+            AiModelConfig? selectedModel = EnabledModels.FirstOrDefault(model => model.SelectionId == SelectedModelSelectionId);
+            RestSharp.RestResponse<AiSession> response = await MiddlewareClient.CreateAiSession(new AiCreateSessionParameters
+            {
+                ProviderId = selectedModel?.ProviderId ?? 0,
+                ModelId = selectedModel?.ModelId
+            });
+            if (response.IsSuccessful && response.Data != null)
+            {
+                CurrentSession = response.Data;
+                SessionName = CurrentSession.Name;
+                Messages = [];
+                RunError = "";
+                await LoadSessions();
+            }
+            else
+            {
+                ShowAssistantError(GetResponseError(response));
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowAssistantError(exception.Message, exception);
+        }
+    }
+
+    private async Task OpenSession(long sessionId)
+    {
+        try
+        {
+            RestSharp.RestResponse<AiSession> response = await MiddlewareClient.GetAiSession(sessionId);
+            if (response.IsSuccessful && response.Data != null)
+            {
+                CurrentSession = response.Data;
+                SelectedModelSelectionId = FindEnabledSelectionId(AiModelConfig.BuildSelectionId(CurrentSession.ProviderId, CurrentSession.ModelId))
+                    ?? FindEnabledSelectionId(CurrentSession.ModelId)
+                    ?? SelectedModelSelectionId;
+                SessionName = CurrentSession.Name;
+                RunError = "";
+                await LoadMessages();
+            }
+            else
+            {
+                ShowAssistantError(GetResponseError(response));
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowAssistantError(exception.Message, exception);
+        }
+    }
+
+    private async Task RenameCurrentSession()
+    {
+        if (CurrentSession == null || string.IsNullOrEmpty(SessionName))
+        {
+            return;
+        }
+        string trimmedName = SessionName.Trim();
+        try
+        {
+            RestSharp.RestResponse<bool> response = await MiddlewareClient.RenameAiSession(CurrentSession.Id, new AiUpdateSessionParameters { Name = trimmedName });
+            if (response.IsSuccessful)
+            {
+                CurrentSession.Name = trimmedName;
+                await LoadSessions();
+            }
+            else
+            {
+                ShowAssistantError(GetResponseError(response));
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowAssistantError(exception.Message, exception);
+        }
+    }
+
+    private void RequestDeleteSession()
+    {
+        if (CurrentSession == null)
+        {
+            return;
+        }
+        DeleteSessionMessage = $"{userConfig.GetText("U9042")}{CurrentSession.Name}?";
+        DeleteSessionMode = true;
+    }
+
+    private async Task DeleteCurrentSession()
+    {
+        if (CurrentSession == null)
+        {
+            return;
+        }
+        try
+        {
+            RestSharp.RestResponse<bool> response = await MiddlewareClient.DeleteAiSession(CurrentSession.Id);
+            if (response.IsSuccessful)
+            {
+                CurrentSession = null;
+                SessionName = "";
+                Messages = [];
+                await LoadSessions();
+            }
+            else
+            {
+                ShowAssistantError(GetResponseError(response));
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowAssistantError(exception.Message, exception);
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        await SendPrompt(Prompt);
+    }
+
+    private async Task RetryLastPrompt()
+    {
+        await SendPrompt(LastPrompt);
+    }
+
+    private async Task SendPrompt(string prompt)
+    {
+        if (string.IsNullOrEmpty(prompt))
+        {
+            return;
+        }
+
+        if (CurrentSession == null)
+        {
+            await CreateSession();
+            if (CurrentSession == null)
+            {
+                // Session creation failed; the error has already been shown.
+                return;
+            }
+        }
+
+        LastPrompt = prompt;
+        Prompt = "";
+        StreamingOutput = "";
+        RunError = "";
+        IsActive = true;
+        Messages.Add(new AiChatMessage { Role = nameof(AiMessageRole.User), Content = prompt });
+        await InvokeAsync(StateHasChanged);
+        RunCancellation?.Dispose();
+        CancellationTokenSource runCancellation = new();
+        RunCancellation = runCancellation;
+
+        try
+        {
+            await StreamRun(prompt, runCancellation.Token);
+        }
+        catch (OperationCanceledException) when (runCancellation.IsCancellationRequested) { /* Operation cancelled */ }
+        catch (Exception exception)
+        {
+            ShowAssistantError(exception.Message, exception);
+        }
+        finally
+        {
+            IsActive = false;
+            if (ReferenceEquals(RunCancellation, runCancellation))
+            {
+                RunCancellation = null;
+            }
+            runCancellation.Dispose();
+            StreamingOutput = "";
+            if (!IsDisposed && CurrentSession != null)
+            {
+                await LoadMessages();
+            }
+            if (!IsDisposed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Streams one assistant turn from the middleware AG-UI endpoint using the thread id of the
+    /// current session. History is restored server-side, so only the new user message is sent.
+    /// </summary>
+    private async Task StreamRun(string prompt, CancellationToken cancellationToken)
+    {
+        string token = await TokenService.GetAccessToken() ?? "";
+        HttpClientHandler httpClientHandler = new()
+        {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
+        using HttpClient httpClient = new(httpClientHandler) { Timeout = TimeSpan.FromMinutes(5) };
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        AGUIChatClient chatClient = new(httpClient, ConfigFile.MiddlewareServerUri.TrimEnd('/') + "/api/Ai/Runs/AgUi");
+        ChatOptions options = new() { ConversationId = CurrentSession!.Id.ToString() };
+
+        await foreach (ChatResponseUpdate update in chatClient.GetStreamingResponseAsync(
+            [new ChatMessage(ChatRole.User, prompt)], options, cancellationToken))
+        {
+            foreach (AIContent content in update.Contents)
+            {
+                if (content is TextContent text)
+                {
+                    StreamingOutput += text.Text;
+                }
+                else if (content is ErrorContent error)
+                {
+                    ShowAssistantError(error.Message ?? userConfig.GetText("unspecified_error"));
+                }
+            }
+            if (!IsDisposed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey && !IsActive)
+        {
+            await SendMessage();
+        }
+    }
+
+    private string MessageLabel(string role)
+    {
+        return role switch
+        {
+            nameof(AiMessageRole.User) => userConfig.GetText("user"),
+            nameof(AiMessageRole.AssistantOutput) => userConfig.GetText("assistant_output"),
+            _ => role
+        };
+    }
+
+    private void ShowAssistantError(string message, Exception? exception = null)
+    {
+        RunError = string.IsNullOrWhiteSpace(message) ? userConfig.GetText("unspecified_error") : message;
+        DisplayMessageInUi(exception, userConfig.GetText("assistant_error"), RunError, true);
+    }
+
+    private string GetResponseError<T>(RestSharp.RestResponse<T> response)
+    {
+        if (!string.IsNullOrWhiteSpace(response.ErrorMessage))
+        {
+            return response.ErrorMessage;
+        }
+        if (!string.IsNullOrWhiteSpace(response.Content))
+        {
+            string content = response.Content.Trim().Trim('"');
+            string translated = userConfig.GetText(content);
+            return translated != GlobalConst.kUndefinedText ? translated : userConfig.GetApiText(content);
+        }
+        if (response.StatusCode != default)
+        {
+            return $"{(int)response.StatusCode} {response.StatusDescription}".Trim();
+        }
+        return userConfig.GetText("unspecified_error");
+    }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        RunCancellation?.Cancel();
+        RunCancellation?.Dispose();
+        RunCancellation = null;
+    }
+}

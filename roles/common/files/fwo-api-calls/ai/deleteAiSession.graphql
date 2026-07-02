@@ -1,0 +1,5 @@
+mutation deleteAiSession($id: bigint!) {
+  delete_ai_session_by_pk(id: $id) {
+    deletedIdLong: id
+  }
+}

@@ -1,0 +1,31 @@
+query getAiSettings {
+  config(where: {config_user: {_eq: 0}, config_key: {_in: ["system_prompt", "aiLastModelId"]}}) {
+    config_key
+    config_value
+  }
+  ai_provider(order_by: {id: asc}) {
+    id
+    kind
+    display_name
+    endpoint_url
+    api_key_env_variable
+    timeout_seconds
+    max_retries
+    enabled
+    models(order_by: {id: asc}) {
+      model_id
+      display_name
+      enabled
+      streaming_supported
+      tool_calls_supported
+      vision_supported
+      reasoning_supported
+      context_size
+      temperature
+      top_p
+      top_k
+      max_output_tokens
+      reasoning_effort
+    }
+  }
+}

@@ -161,10 +161,5 @@ namespace FWO.Middleware.Server.Controllers
 
             return Ok(jobStatus);
         }
-
-        private static string ConvertOutput(List<(Rule, (ComplianceNetworkZone, ComplianceNetworkZone))> forbiddenCommunicationsOutput)
-        {
-            return JsonSerializer.Serialize(forbiddenCommunicationsOutput);
-        }
     }
 }

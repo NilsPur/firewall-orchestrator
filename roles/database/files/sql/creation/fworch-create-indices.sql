@@ -126,3 +126,6 @@ Create unique index if not exists service_flow_svcgrp_id_active_only_one_per_mgm
 Create unique index if not exists time_object_flow_timeobj_id_active_only_one_per_mgm on time_object (mgm_id, flow_timeobj_id) where flow_active = true;
 Create unique index if not exists object_flow_nwobj_id_active_only_one_per_mgm on object (mgm_id, flow_nwobj_id) where flow_active = true;
 Create unique index if not exists object_flow_nwgrp_id_active_only_one_per_mgm on object (mgm_id, flow_nwgrp_id) where flow_active = true;
+
+Create index IF NOT EXISTS idx_ai_session01 on ai_session (user_id);
+Create index IF NOT EXISTS idx_ai_model01 on ai_model (provider_id);

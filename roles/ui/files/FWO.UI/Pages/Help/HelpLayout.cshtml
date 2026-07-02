@@ -1,5 +1,4 @@
-﻿@using FWO.Config.Api
-@using FWO.Data
+@using FWO.Config.Api
 @using FWO.Basics
 
 @inject UserConfig userConfig
@@ -54,6 +53,11 @@
                 <li class="nav-item px-2">
                     <a class="nav-link" href="/help/API/?lang=@($"{userConfig.GetUserLanguage()}")">
                         <span class="@Icons.Api"></span> @userConfig.GetText("api")
+                    </a>
+                </li>
+                <li class="nav-item px-2">
+                    <a class="nav-link" href="/help/assistant/?lang=@($"{userConfig.GetUserLanguage()}")">
+                        <span class="@Icons.UiMessages"></span> @userConfig.GetText("assistant")
                     </a>
                 </li>
             </ul>

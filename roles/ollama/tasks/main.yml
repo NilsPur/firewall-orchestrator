@@ -1,0 +1,156 @@
+---
+- name: ensure Ollama model directory exists
+  file:
+    path: "{{ ai_ollama_models_dir }}"
+    state: directory
+    mode: "0750"
+    owner: "{{ fworch_user }}"
+    group: "{{ fworch_group }}"
+  become: true
+
+- name: ensure Ollama image is present
+  block:
+    - name: pull Ollama image
+      containers.podman.podman_image:
+        name: "{{ ai_ollama_image }}"
+        state: present
+      environment: "{{ proxy_env }}"
+  rescue:
+    - name: warn that the Ollama image could not be pulled
+      ansible.builtin.debug:
+        msg: "Ollama image {{ ai_ollama_image }} could not be pulled; skipping Ollama setup and keeping any existing service/container unchanged."
+    - name: mark Ollama as unavailable
+      ansible.builtin.set_fact:
+        ai_ollama_unavailable: true
+  become: true
+
+- name: stop Ollama service before container recreation
+  ansible.builtin.systemd:
+    name: "{{ ai_ollama_service_name }}"
+    state: stopped
+  become: true
+  failed_when: false
+  when: not (ai_ollama_unavailable | default(false))
+
+- name: remove existing Ollama container before recreation
+  containers.podman.podman_container:
+    name: "{{ ai_ollama_container_name }}"
+    state: absent
+  become: true
+  when: not (ai_ollama_unavailable | default(false))
+
+- name: find NVIDIA GPU devices for Ollama
+  ansible.builtin.find:
+    paths: /dev
+    patterns: "nvidia*"
+    file_type: any
+  register: ai_ollama_nvidia_devices
+  become: true
+  failed_when: false
+
+- name: find DRI GPU devices for Ollama
+  ansible.builtin.find:
+    paths: /dev/dri
+    patterns:
+      - "card*"
+      - "renderD*"
+    file_type: any
+  register: ai_ollama_dri_devices
+  become: true
+  failed_when: false
+
+- name: check AMD KFD GPU device for Ollama
+  ansible.builtin.stat:
+    path: /dev/kfd
+  register: ai_ollama_kfd_device
+  become: true
+
+- name: build Ollama GPU device mapping
+  ansible.builtin.set_fact:
+    ai_ollama_gpu_device_paths: >-
+      {{
+        (
+          (ai_ollama_nvidia_devices.files | default([]) | map(attribute='path') | list)
+          + (ai_ollama_dri_devices.files | default([]) | map(attribute='path') | list)
+          + (['/dev/kfd'] if (ai_ollama_kfd_device.stat.exists | default(false)) else [])
+        ) | unique | sort
+      }}
+
+- name: build Ollama GPU container device mappings
+  ansible.builtin.set_fact:
+    ai_ollama_gpu_device_mappings: "{{ ai_ollama_gpu_device_paths | map('regex_replace', '^(.*)$', '\\1:\\1') | list }}"
+
+- name: ensure Ollama container exists
+  containers.podman.podman_container:
+    name: "{{ ai_ollama_container_name }}"
+    image: "{{ ai_ollama_image }}"
+    state: created
+    recreate: true
+    rm: true
+    network:
+      - host
+    env:
+      OLLAMA_HOST: "{{ ai_ollama_host }}:{{ ai_ollama_port }}"
+      HTTP_PROXY: "{{ http_proxy }}"
+      HTTPS_PROXY: "{{ https_proxy }}"
+      NO_PROXY: "{{ no_proxy }}"
+    volumes:
+      - "{{ ai_ollama_models_dir }}:/root/.ollama:Z"
+    device: "{{ ai_ollama_gpu_device_mappings if ai_ollama_gpu_device_mappings | length > 0 else omit }}"
+  become: true
+  when: not (ai_ollama_unavailable | default(false))
+
+- name: generate Ollama systemd unit content
+  containers.podman.podman_generate_systemd:
+    name: "{{ ai_ollama_container_name }}"
+    new: true
+    no_header: true
+    restart_policy: on-failure
+    use_names: true
+  register: ai_ollama_systemd_unit
+  become: true
+  when: not (ai_ollama_unavailable | default(false))
+
+- name: install generated Ollama systemd service
+  copy:
+    content: >-
+      {{
+        (
+          ai_ollama_systemd_unit.systemd_units
+          | dict2items
+          | first
+        ).value
+        | regex_replace(
+            '\\[Service\\]\\n',
+            '[Service]\nStandardOutput=journal\nStandardError=journal\nSyslogIdentifier=' ~ product_name ~ '-ollama\n',
+            1
+          )
+      }}
+    dest: "/lib/systemd/system/{{ ai_ollama_service_name }}.service"
+    backup: true
+    mode: "0644"
+    owner: "root"
+  become: true
+  when: not (ai_ollama_unavailable | default(false))
+
+- name: reload systemd after installing Ollama service
+  systemd:
+    daemon_reload: true
+  become: true
+  when: not (ai_ollama_unavailable | default(false))
+
+- name: clear Ollama service failed state
+  command: "systemctl reset-failed {{ ai_ollama_service_name }}"
+  become: true
+  changed_when: false
+  failed_when: false
+  when: not (ai_ollama_unavailable | default(false))
+
+- name: ensure Ollama service is running
+  systemd:
+    name: "{{ ai_ollama_service_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: not (ai_ollama_unavailable | default(false))

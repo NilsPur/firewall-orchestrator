@@ -1,0 +1,10 @@
+fragment aiSessionDetails on ai_session {
+  id
+  user_id
+  name
+  created
+  system_prompt
+  model_id
+  provider_id
+  state
+}

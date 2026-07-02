@@ -1,0 +1,5 @@
+query getAiSessionById($id: bigint!) {
+  ai_session(where: {id: {_eq: $id}}) {
+    ...aiSessionDetails
+  }
+}

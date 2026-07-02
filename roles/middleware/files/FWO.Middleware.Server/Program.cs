@@ -6,6 +6,8 @@ using FWO.Config.File;
 using FWO.Logging;
 using FWO.Middleware.Server;
 using FWO.Middleware.Server.Services;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using FWO.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -85,7 +87,6 @@ builder.Services.AddSingleton<UpdateFlowsSchedulerService>();
 builder.Services.AddControllers()
   .AddJsonOptions(jsonOptions =>
   {
-      //jsonOptions.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
       jsonOptions.JsonSerializerOptions.PropertyNamingPolicy = null;
   });
 
@@ -94,6 +95,29 @@ builder.Services.AddSingleton<List<Ldap>>(connectedLdaps);
 builder.Services.AddSingleton<FlowCatalogService>();
 builder.Services.AddSingleton<FlowComplianceService>();
 builder.Services.AddSingleton<FlowRequestService>();
+builder.Services.AddSingleton<AiSettingsService>();
+builder.Services.AddSingleton<AiSessionService>();
+builder.Services.AddSingleton<AgentFactoryService>();
+builder.Services.AddSingleton<AiOllamaModelService>();
+builder.Services.AddSingleton<AiToolExecutionService>();
+builder.Services.AddSingleton<AiTranscriptService>();
+
+// Run the Ollama model warmup loop as a hosted background service, sharing the singleton
+// instance injected into the controller.
+builder.Services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<AiOllamaModelService>());
+
+// Native AG-UI streaming endpoint: a single routing agent picks the session's fixed provider/model,
+// and FwoAgentSessionStore persists the conversation thread in the ai_session table.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddAGUI();
+builder.Services.AddAIAgent(FwoRoutingAgent.AgentName,
+        (serviceProvider, name) => new FwoRoutingAgent(
+            serviceProvider.GetRequiredService<AgentFactoryService>(),
+            serviceProvider.GetRequiredService<AiSettingsService>()))
+    .WithSessionStore((serviceProvider, name) => new FwoAgentSessionStore(
+            serviceProvider.GetRequiredService<AiSessionService>(),
+            serviceProvider.GetRequiredService<IHttpContextAccessor>()),
+        ServiceLifetime.Singleton, withIsolation: false);
 
 builder.Services.AddAuthentication(confOptions =>
 {
@@ -152,14 +176,15 @@ if (app.Environment.IsDevelopment())
 app.UseSwagger();
 app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "FWO.Middleware v1"); });
 
-//app.UseHttpsRedirection();
-
 app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Native AG-UI streaming endpoint for the assistant runs (replaces the former custom SSE controller).
+app.MapAGUI(FwoRoutingAgent.AgentName, "/api/Ai/Runs/AgUi").RequireAuthorization();
 
 //Register JobExecutionTracker with scheduler
 ISchedulerFactory schedulerFactory = app.Services.GetRequiredService<ISchedulerFactory>();

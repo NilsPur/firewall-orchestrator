@@ -42,6 +42,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("elementsPerFetch"), JsonPropertyName("elementsPerFetch"), UserConfigData]
         public int ElementsPerFetch { get; set; } = 100;
 
+        [JsonProperty("aiLastModelId"), JsonPropertyName("aiLastModelId"), UserConfigData]
+        public string AiLastModelId { get; set; } = "";
+
         [JsonProperty("maxInitialFetchesRightSidebar"), JsonPropertyName("maxInitialFetchesRightSidebar")]
         public int MaxInitialFetchesRightSidebar { get; set; } = 10;
 

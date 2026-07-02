@@ -8,12 +8,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.GenAI" Version="1.12.0" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.11.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.11.1-preview.260625.1" />
+	  <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.11.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" Version="1.11.1-preview.260625.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
     <PackageReference Include="Novell.Directory.Ldap.NETStandard" Version="4.0.0" />
     <PackageReference Include="PuppeteerSharp" Version="25.2.1" />
     <PackageReference Include="Quartz" Version="3.18.2" />
     <PackageReference Include="Quartz.Extensions.Hosting" Version="3.18.2" />
     <PackageReference Include="Quartz.Serialization.Json" Version="3.18.2" />
+    <PackageReference Include="OllamaSharp" Version="5.4.25" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
 

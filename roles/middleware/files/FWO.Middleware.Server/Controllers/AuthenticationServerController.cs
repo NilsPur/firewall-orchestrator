@@ -19,7 +19,7 @@ namespace FWO.Middleware.Server.Controllers
     [ApiController]
     public class AuthenticationServerController : ControllerBase
     {
-        private List<Ldap> ldaps;
+        private readonly List<Ldap> ldaps;
         private readonly ApiConnection apiConnection;
 
         /// <summary>

@@ -20,6 +20,8 @@
 - hosts: middlewareserver
   roles:
     - { role: openldap-server, when: "not installation_mode == 'uninstall'" }
+    - { role: podman, when: "not installation_mode == 'uninstall'" }
+    - { role: ollama, when: "not installation_mode == 'uninstall'" }
     - { role: lib, when: "not installation_mode == 'uninstall'" }
     - { role: middleware, when: "not installation_mode == 'uninstall'" }
   tags:

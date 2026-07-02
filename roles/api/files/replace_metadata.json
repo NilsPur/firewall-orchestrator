@@ -35464,6 +35464,223 @@
                   }
                 }
               ]
+            },
+            {
+              "table": {
+                "name": "ai_session",
+                "schema": "public"
+              },
+              "insert_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "check": {},
+                    "columns": [
+                      "id",
+                      "user_id",
+                      "name",
+                      "created",
+                      "system_prompt",
+                      "model_id",
+                      "provider_id"
+                    ]
+                  }
+                }
+              ],
+              "delete_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "filter": {}
+                  }
+                }
+              ],
+              "select_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "user_id",
+                      "name",
+                      "created",
+                      "system_prompt",
+                      "model_id",
+                      "provider_id",
+                      "state"
+                    ],
+                    "filter": {}
+                  }
+                }
+              ],
+              "update_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "filter": {},
+                    "columns": [
+                      "name",
+                      "model_id",
+                      "provider_id",
+                      "state"
+                    ],
+                    "check": {}
+                  }
+                }
+              ]
+            },
+            {
+              "table": {
+                "name": "ai_provider",
+                "schema": "public"
+              },
+              "array_relationships": [
+                {
+                  "name": "models",
+                  "using": {
+                    "foreign_key_constraint_on": {
+                      "column": "provider_id",
+                      "table": {
+                        "name": "ai_model",
+                        "schema": "public"
+                      }
+                    }
+                  }
+                }
+              ],
+              "insert_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "check": {},
+                    "columns": [
+                      "id",
+                      "kind",
+                      "display_name",
+                      "endpoint_url",
+                      "api_key_env_variable",
+                      "timeout_seconds",
+                      "max_retries",
+                      "enabled"
+                    ]
+                  }
+                }
+              ],
+              "select_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "kind",
+                      "display_name",
+                      "endpoint_url",
+                      "api_key_env_variable",
+                      "timeout_seconds",
+                      "max_retries",
+                      "enabled"
+                    ],
+                    "filter": {}
+                  }
+                }
+              ],
+              "update_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "filter": {},
+                    "columns": [
+                      "kind",
+                      "display_name",
+                      "endpoint_url",
+                      "api_key_env_variable",
+                      "timeout_seconds",
+                      "max_retries",
+                      "enabled"
+                    ],
+                    "check": {}
+                  }
+                }
+              ],
+              "delete_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "filter": {}
+                  }
+                }
+              ]
+            },
+            {
+              "table": {
+                "name": "ai_model",
+                "schema": "public"
+              },
+              "object_relationships": [
+                {
+                  "name": "provider",
+                  "using": {
+                    "foreign_key_constraint_on": "provider_id"
+                  }
+                }
+              ],
+              "insert_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "check": {},
+                    "columns": [
+                      "provider_id",
+                      "model_id",
+                      "display_name",
+                      "enabled",
+                      "streaming_supported",
+                      "tool_calls_supported",
+                      "vision_supported",
+                      "reasoning_supported",
+                      "context_size",
+                      "temperature",
+                      "top_p",
+                      "top_k",
+                      "max_output_tokens",
+                      "reasoning_effort"
+                    ]
+                  }
+                }
+              ],
+              "select_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "provider_id",
+                      "model_id",
+                      "display_name",
+                      "enabled",
+                      "streaming_supported",
+                      "tool_calls_supported",
+                      "vision_supported",
+                      "reasoning_supported",
+                      "context_size",
+                      "temperature",
+                      "top_p",
+                      "top_k",
+                      "max_output_tokens",
+                      "reasoning_effort"
+                    ],
+                    "filter": {}
+                  }
+                }
+              ],
+              "delete_permissions": [
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "filter": {}
+                  }
+                }
+              ]
             }
           ],
           "functions": [

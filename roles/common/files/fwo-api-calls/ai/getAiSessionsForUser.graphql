@@ -1,0 +1,5 @@
+query getAiSessionsForUser($userId: Int!) {
+  ai_session(where: {user_id: {_eq: $userId}}, order_by: {created: desc}) {
+    ...aiSessionDetails
+  }
+}

@@ -1,0 +1,5 @@
+query getAllAiSessions {
+  ai_session(order_by: {created: desc}) {
+    ...aiSessionDetails
+  }
+}

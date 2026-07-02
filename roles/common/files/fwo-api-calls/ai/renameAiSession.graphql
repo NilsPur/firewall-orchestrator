@@ -1,0 +1,5 @@
+mutation renameAiSession($id: bigint!, $name: String!) {
+  update_ai_session_by_pk(pk_columns: {id: $id}, _set: {name: $name}) {
+    updatedIdLong: id
+  }
+}

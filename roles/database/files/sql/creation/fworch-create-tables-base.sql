@@ -514,6 +514,52 @@ Create table "config"
 	primary key ("config_key","config_user")
 );
 
+Create table "ai_provider"
+(
+	"id" BIGSERIAL,
+	"kind" Varchar NOT NULL,
+	"display_name" Varchar NOT NULL Default '',
+	"endpoint_url" Varchar NOT NULL Default '',
+	"api_key_env_variable" Varchar NOT NULL Default '',
+	"timeout_seconds" Integer NOT NULL Default 60,
+	"max_retries" Integer NOT NULL Default 1,
+	"enabled" Boolean NOT NULL Default FALSE,
+	primary key ("id")
+);
+
+Create table "ai_model"
+(
+	"id" BIGSERIAL,
+	"provider_id" Bigint NOT NULL,
+	"model_id" Varchar NOT NULL Default '',
+	"display_name" Varchar NOT NULL Default '',
+	"enabled" Boolean NOT NULL Default FALSE,
+	"streaming_supported" Boolean,
+	"tool_calls_supported" Boolean,
+	"vision_supported" Boolean,
+	"reasoning_supported" Boolean,
+	"context_size" Integer,
+	"temperature" Real,
+	"top_p" Real,
+	"top_k" Integer,
+	"max_output_tokens" Integer,
+	"reasoning_effort" Integer,
+	primary key ("id")
+);
+
+Create table "ai_session"
+(
+	"id" BIGSERIAL,
+	"user_id" Integer NOT NULL,
+	"model_id" Varchar NOT NULL Default '',
+	"provider_id" Bigint NOT NULL,
+	"name" Varchar NOT NULL,
+	"created" Timestamp with time zone NOT NULL Default now(),
+	"system_prompt" Text NOT NULL,
+	"state" jsonb NOT NULL Default '{}'::jsonb,
+	primary key ("id")
+);
+
 create table time_object
 (
     time_obj_id BIGSERIAL PRIMARY KEY,

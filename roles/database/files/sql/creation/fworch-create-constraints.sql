@@ -74,3 +74,12 @@ CHECK (
 -- rule_owner
 ALTER TABLE rule_owner ADD CONSTRAINT rule_owner_matched_objects_for_ip_based
 CHECK ( owner_mapping_source_id  != 1 OR matched_objects IS NOT NULL );
+
+ALTER TABLE "ai_session"
+ADD CONSTRAINT "ai_session_user_id_uiuser_uiuser_id_fkey" FOREIGN KEY ("user_id") REFERENCES "uiuser" ("uiuser_id") ON UPDATE RESTRICT ON DELETE CASCADE;
+
+ALTER TABLE "ai_session"
+ADD CONSTRAINT "ai_session_provider_id_ai_provider_id_fkey" FOREIGN KEY ("provider_id") REFERENCES "ai_provider" ("id") ON UPDATE RESTRICT ON DELETE CASCADE;
+
+ALTER TABLE "ai_model"
+ADD CONSTRAINT "ai_model_provider_id_ai_provider_id_fkey" FOREIGN KEY ("provider_id") REFERENCES "ai_provider" ("id") ON UPDATE RESTRICT ON DELETE CASCADE;

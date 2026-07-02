@@ -1,0 +1,7 @@
+mutation saveAiSessionState($id: bigint!, $userId: Int!, $state: jsonb!) {
+  update_ai_session(where: {id: {_eq: $id}, user_id: {_eq: $userId}}, _set: {state: $state}) {
+    returning {
+      updatedIdLong: id
+    }
+  }
+}

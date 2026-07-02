@@ -58,6 +58,7 @@ namespace FWO.Basics
         public const string OrderByDesc = "bi bi-caret-down-fill";
         public const string Refresh = "bi bi-arrow-clockwise";
         public const string Undo = "bi bi-arrow-counterclockwise";
+        public const string TestConnection = "bi bi-plug-fill";
 
         //Actions Html
         public const string HtmlArrowExpanded = "&#9660;";
