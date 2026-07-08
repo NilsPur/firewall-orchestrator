@@ -60,7 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_session01 on ai_session (user_id);
 CREATE INDEX IF NOT EXISTS idx_ai_model01 on ai_model (provider_id);
 
 INSERT INTO config (config_key, config_value, config_user)
-VALUES ('system_prompt', 'You are the Firewall Orchestrator assistant. Answer using the user''s FWO access scope and prefer read-only tools for factual FWO data.', 0)
+VALUES ('system_prompt', 'You are the Firewall Orchestrator assistant. Answer using the user''s FWO access scope. Ground factual answers in data returned by FWO tools instead of assumptions. Use the appropriate read-only tool before answering factual FWO questions, and state when tool data is missing or insufficient.', 0)
 ON CONFLICT (config_key, config_user) DO NOTHING;
 
 INSERT INTO config (config_key, config_value, config_user)

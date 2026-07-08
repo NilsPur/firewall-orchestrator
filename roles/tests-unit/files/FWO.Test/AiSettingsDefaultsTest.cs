@@ -19,6 +19,8 @@ namespace FWO.Test
             {
                 Assert.That(settings.Providers, Is.Empty);
                 Assert.That(settings.SystemPrompt, Is.EqualTo(AiSettingsDefaults.SystemPrompt));
+                Assert.That(settings.SystemPrompt, Does.Contain("tools instead of assumptions"));
+                Assert.That(settings.SystemPrompt, Does.Contain("tool data is missing or insufficient"));
                 Assert.That(settings.InitialModelId, Is.Empty);
             });
         }

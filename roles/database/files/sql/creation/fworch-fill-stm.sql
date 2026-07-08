@@ -596,7 +596,7 @@ INSERT INTO config (config_key, config_value, config_user) VALUES ('refreshToken
 INSERT INTO config (config_key, config_value, config_user) VALUES ('refreshTokenLifetimeUnit', 'Days', 0);
 
 -- AI assistant
-INSERT INTO config (config_key, config_value, config_user) VALUES ('system_prompt', 'You are the Firewall Orchestrator assistant. Answer using the user''s FWO access scope and prefer read-only tools for factual FWO data.', 0);
+INSERT INTO config (config_key, config_value, config_user) VALUES ('system_prompt', 'You are the Firewall Orchestrator assistant. Answer using the user''s FWO access scope. Ground factual answers in data returned by FWO tools instead of assumptions. Use the appropriate read-only tool before answering factual FWO questions, and state when tool data is missing or insufficient.', 0);
 INSERT INTO config (config_key, config_value, config_user) VALUES ('aiLastModelId', '', 0);
 INSERT INTO ai_provider (id, kind, display_name, endpoint_url, api_key_env_variable, enabled) VALUES (1, 'Ollama', 'Ollama', 'http://127.0.0.1:11434', '', TRUE);
 INSERT INTO ai_provider (id, kind, display_name, endpoint_url, api_key_env_variable, enabled) VALUES (2, 'OpenAi', 'OpenAI', '', 'OPENAI_API_KEY', FALSE);
