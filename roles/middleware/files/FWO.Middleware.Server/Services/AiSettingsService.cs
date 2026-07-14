@@ -114,9 +114,6 @@ namespace FWO.Middleware.Server.Services
             settings.Provider.DisplayName = string.IsNullOrWhiteSpace(settings.Provider.DisplayName)
                 ? AiSettingsDefaults.ProviderDisplayName
                 : settings.Provider.DisplayName;
-            settings.Provider.ApiKeyEnvVariable = string.IsNullOrWhiteSpace(settings.Provider.ApiKeyEnvVariable)
-                ? AiSettingsDefaults.ApiKeyEnvVariable
-                : settings.Provider.ApiKeyEnvVariable;
             settings.Provider.Enabled = true;
 
             settings.Model.ProviderId = settings.Provider.Id;

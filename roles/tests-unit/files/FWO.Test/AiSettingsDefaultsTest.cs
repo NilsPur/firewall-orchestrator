@@ -109,6 +109,32 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task SaveSettings_PreservesEmptyApiKeyEnvironmentVariableForOllama()
+        {
+            CapturingApiConnection apiConnection = new();
+            AiSettingsService settingsService = new(apiConnection);
+            AiSettings settings = new()
+            {
+                Provider = new AiProviderConfig
+                {
+                    Kind = AiProviderKind.Ollama,
+                    EndpointUrl = "http://127.0.0.1:11434",
+                    ApiKeyEnvVariable = ""
+                },
+                Model = new AiModelConfig { ModelId = "qwen3.5:4b" }
+            };
+
+            AiSettings saved = await settingsService.SaveSettings(settings);
+
+            Dictionary<string, object?> provider = GetVariable<Dictionary<string, object?>>(apiConnection.LastVariables!, "provider");
+            Assert.Multiple(() =>
+            {
+                Assert.That(saved.Provider.ApiKeyEnvVariable, Is.Empty);
+                Assert.That(provider["api_key_env_variable"], Is.EqualTo(""));
+            });
+        }
+
+        [Test]
         public async Task GetSettings_PreservesNonDefaultSeededProviderKind()
         {
             CapturingApiConnection apiConnection = new()
@@ -137,7 +163,11 @@ namespace FWO.Test
 
             AiSettings settings = await settingsService.GetSettings();
 
-            Assert.That(settings.Provider.Kind, Is.EqualTo(AiProviderKind.Ollama));
+            Assert.Multiple(() =>
+            {
+                Assert.That(settings.Provider.Kind, Is.EqualTo(AiProviderKind.Ollama));
+                Assert.That(settings.Provider.ApiKeyEnvVariable, Is.Empty);
+            });
         }
 
         [Test]
