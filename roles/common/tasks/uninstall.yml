@@ -108,19 +108,6 @@
     enabled: no
   ignore_errors: true
 
-- name: stop and disable {{ product_name }}-ollama
-  service:
-    name: "{{ ai_ollama_service_name }}"
-    state: stopped
-    enabled: no
-  ignore_errors: true
-
-- name: remove Ollama Podman container
-  containers.podman.podman_container:
-    name: "{{ ai_ollama_container_name }}"
-    state: absent
-  ignore_errors: true
-
 - name: stop and disable current Hasura API service
   service:
     name: "{{ api_service_name }}"
@@ -198,7 +185,6 @@
         - /etc/apache2/sites-enabled/{{ product_name }}-mw.conf
         - /etc/apache2/sites-enabled/{{ product_name }}-maintenance.conf
         - /lib/systemd/system/{{ api_service_name }}.service
-        - /lib/systemd/system/{{ ai_ollama_service_name }}.service
         - /lib/systemd/system/fworch-hasura-docker-api.service
         - /var/lib/ldap/{{ product_name }}.internal
         - /var/lib/ldap/example.com

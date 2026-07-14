@@ -1,5 +1,5 @@
 query getAiConfig {
-  config(where: {config_user: {_eq: 0}, config_key: {_in: ["system_prompt", "aiLastModelId"]}}) {
+  config(where: {config_user: {_eq: 0}, config_key: {_in: ["system_prompt"]}}) {
     config_key
     config_value
   }

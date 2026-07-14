@@ -332,13 +332,6 @@ namespace FWO.Middleware.Client
             return await restClient.ExecuteAsync<AiOperationResult>(request);
         }
 
-        public async Task<RestResponse<AiOperationResult>> TestAiModel(AiModelTestParameters parameters)
-        {
-            RestRequest request = new("Ai/Models/Test", Method.Post);
-            request.AddJsonBody(parameters);
-            return await restClient.ExecuteAsync<AiOperationResult>(request);
-        }
-
         public async Task<RestResponse<List<AiSession>>> GetAiSessions()
         {
             RestRequest request = new("Ai/Sessions", Method.Get);
@@ -375,33 +368,6 @@ namespace FWO.Middleware.Client
         {
             RestRequest request = new($"Ai/Sessions/{id}", Method.Delete);
             return await restClient.ExecuteAsync<bool>(request);
-        }
-
-        public async Task<RestResponse<AiOllamaModelsResponse>> GetOllamaModels()
-        {
-            RestRequest request = new("Ai/Ollama/Models", Method.Get);
-            return await restClient.ExecuteAsync<AiOllamaModelsResponse>(request);
-        }
-
-        public async Task<RestResponse<AiOperationResult>> DownloadOllamaModel(AiOllamaModelParameters parameters)
-        {
-            RestRequest request = new("Ai/Ollama/Models/Pull", Method.Post);
-            request.AddJsonBody(parameters);
-            return await restClient.ExecuteAsync<AiOperationResult>(request);
-        }
-
-        public async Task<RestResponse<AiOperationResult>> CancelDownloadOllamaModel(AiOllamaModelParameters parameters)
-        {
-            RestRequest request = new("Ai/Ollama/Models/Cancel", Method.Post);
-            request.AddJsonBody(parameters);
-            return await restClient.ExecuteAsync<AiOperationResult>(request);
-        }
-
-        public async Task<RestResponse<AiOperationResult>> DeleteOllamaModel(AiOllamaModelParameters parameters)
-        {
-            RestRequest request = new("Ai/Ollama/Models/Delete", Method.Post);
-            request.AddJsonBody(parameters);
-            return await restClient.ExecuteAsync<AiOperationResult>(request);
         }
 
         /// <summary>

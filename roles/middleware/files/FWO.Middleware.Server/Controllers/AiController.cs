@@ -8,20 +8,18 @@ using Microsoft.AspNetCore.Mvc;
 namespace FWO.Middleware.Server.Controllers
 {
     /// <summary>
-    /// REST controller for AI assistant settings, sessions, transcripts, and local model administration.
+    /// REST controller for AI assistant settings, sessions, and transcripts.
     /// Conversation runs are streamed by the native AG-UI endpoint (see Program.cs MapAGUI), not here.
     /// </summary>
     [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class AiController(AiSettingsService settingsService, AiSessionService sessionService,
-        AgentFactoryService agentFactory, AiTranscriptService transcriptService, AiOllamaModelService ollamaModelService) : ControllerBase
+        AiTranscriptService transcriptService) : ControllerBase
     {
         private readonly AiSettingsService settingsService = settingsService;
         private readonly AiSessionService sessionService = sessionService;
-        private readonly AgentFactoryService agentFactory = agentFactory;
         private readonly AiTranscriptService transcriptService = transcriptService;
-        private readonly AiOllamaModelService ollamaModelService = ollamaModelService;
 
         /// <summary>
         /// Gets the global AI assistant settings.
@@ -60,28 +58,6 @@ namespace FWO.Middleware.Server.Controllers
         public async Task<ActionResult<AiOperationResult>> TestProvider([FromBody] AiConnectionTestParameters parameters)
         {
             return Ok(await settingsService.TestProvider(parameters.Provider));
-        }
-
-        /// <summary>
-        /// Tests whether a configured model can be selected.
-        /// </summary>
-        [HttpPost("Models/Test")]
-        [Authorize(Roles = Roles.Admin)]
-        public async Task<ActionResult<AiOperationResult>> TestModel([FromBody] AiModelTestParameters parameters)
-        {
-            try
-            {
-                string reply = await agentFactory.RunTest(parameters.Provider, parameters.Model, parameters.SamplePrompt, HttpContext.RequestAborted);
-                return Ok(new AiOperationResult
-                {
-                    Success = !string.IsNullOrWhiteSpace(reply),
-                    MessageKey = string.IsNullOrWhiteSpace(reply) ? "ai_model_no_output" : "ai_model_test_succeeded"
-                });
-            }
-            catch (Exception exception)
-            {
-                return Ok(new AiOperationResult { Success = false, MessageKey = "ai_model_test_failed", MessageArgument = exception.Message });
-            }
         }
 
         /// <summary>
@@ -124,7 +100,7 @@ namespace FWO.Middleware.Server.Controllers
             }
             try
             {
-                return Ok(await sessionService.CreateSession(userId, parameters.Name, parameters.ProviderId, parameters.ModelId));
+                return Ok(await sessionService.CreateSession(userId, parameters.Name));
             }
             catch (InvalidOperationException)
             {
@@ -173,46 +149,6 @@ namespace FWO.Middleware.Server.Controllers
             }
             List<AiChatMessage>? messages = await transcriptService.GetMessages(id, userId, HttpContext.RequestAborted);
             return messages == null ? Forbid() : Ok(messages);
-        }
-
-        /// <summary>
-        /// Lists available Ollama models.
-        /// </summary>
-        [HttpGet("Ollama/Models")]
-        [Authorize(Roles = Roles.Admin)]
-        public async Task<ActionResult<AiOllamaModelsResponse>> GetOllamaModels()
-        {
-            return Ok(await ollamaModelService.GetModels());
-        }
-
-        /// <summary>
-        /// Queues a local Ollama model download.
-        /// </summary>
-        [HttpPost("Ollama/Models/Pull")]
-        [Authorize(Roles = Roles.Admin)]
-        public ActionResult<AiOperationResult> PullOllamaModel([FromBody] AiOllamaModelParameters parameters)
-        {
-            return Ok(ollamaModelService.DownloadModel(parameters.ModelId));
-        }
-
-        /// <summary>
-        /// Cancels a local Ollama model download.
-        /// </summary>
-        [HttpPost("Ollama/Models/Cancel")]
-        [Authorize(Roles = Roles.Admin)]
-        public ActionResult<AiOperationResult> CancelOllamaModel([FromBody] AiOllamaModelParameters parameters)
-        {
-            return Ok(ollamaModelService.CancelDownloadModel(parameters.ModelId));
-        }
-
-        /// <summary>
-        /// Deletes a local Ollama model.
-        /// </summary>
-        [HttpPost("Ollama/Models/Delete")]
-        [Authorize(Roles = Roles.Admin)]
-        public async Task<ActionResult<AiOperationResult>> DeleteOllamaModel([FromBody] AiOllamaModelParameters parameters)
-        {
-            return Ok(await ollamaModelService.DeleteModel(parameters.ModelId));
         }
 
         private bool TryGetUserId(out int userId)

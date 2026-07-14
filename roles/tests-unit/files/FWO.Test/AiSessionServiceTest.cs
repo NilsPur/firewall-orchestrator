@@ -4,7 +4,6 @@ using FWO.Data;
 using FWO.Data.Ai;
 using FWO.Middleware.Server.Services;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
 namespace FWO.Test
@@ -13,20 +12,7 @@ namespace FWO.Test
     public class AiSessionServiceTest
     {
         [Test]
-        public void CreateSession_ThrowsWhenNoEnabledModelIsConfigured()
-        {
-            CapturingApiConnection apiConnection = new() { ConfigResponseJson = "[]", ProviderResponseJson = "[]" };
-            AiSessionService sessionService = new(apiConnection, new AiSettingsService(apiConnection));
-
-            Assert.Multiple(() =>
-            {
-                Assert.ThrowsAsync<InvalidOperationException>(() => sessionService.CreateSession(1, "session", 0, null));
-                Assert.That(apiConnection.Queries, Does.Not.Contain(AiQueries.addAiSession));
-            });
-        }
-
-        [Test]
-        public async Task CreateSession_PersistsResolvedProviderAndModel()
+        public async Task CreateSession_PersistsSingleModel()
         {
             CapturingApiConnection apiConnection = new()
             {
@@ -34,26 +20,24 @@ namespace FWO.Test
                 ProviderResponseJson = """
                 [
                   {
-                    "id": 3,
-                    "kind": "Ollama",
-                    "display_name": "Ollama",
+                    "id": 1,
+                    "kind": "OpenAi",
+                    "display_name": "OpenAI",
                     "enabled": true,
-                    "models": [ { "model_id": "llama", "enabled": true } ]
+                    "models": [ { "model_id": "gpt-5.4-mini", "enabled": true } ]
                   }
                 ]
                 """
             };
             AiSessionService sessionService = new(apiConnection, new AiSettingsService(apiConnection));
 
-            AiSession session = await sessionService.CreateSession(1, null, 0, null);
+            AiSession session = await sessionService.CreateSession(1, null);
 
             object variables = apiConnection.VariablesByQuery[AiQueries.addAiSession];
             Assert.Multiple(() =>
             {
-                Assert.That(GetVariable<long>(variables, "providerId"), Is.EqualTo(3L));
-                Assert.That(GetVariable<string>(variables, "modelId"), Is.EqualTo("llama"));
-                Assert.That(session.ProviderId, Is.EqualTo(3L));
-                Assert.That(session.ModelId, Is.EqualTo("llama"));
+                Assert.That(GetVariable<string>(variables, "modelId"), Is.EqualTo("gpt-5.4-mini"));
+                Assert.That(session.ModelId, Is.EqualTo("gpt-5.4-mini"));
             });
         }
 
@@ -62,7 +46,7 @@ namespace FWO.Test
         {
             CapturingApiConnection apiConnection = new();
             AiSessionService sessionService = new(apiConnection, new AiSettingsService(apiConnection));
-            JObject state = JObject.Parse("""{"messages":[]}""");
+            const string state = """{"messages":[]}""";
 
             bool saved = await sessionService.SaveState(42, 7, state);
 
@@ -72,7 +56,7 @@ namespace FWO.Test
                 Assert.That(saved, Is.True);
                 Assert.That(GetVariable<long>(variables, "id"), Is.EqualTo(42L));
                 Assert.That(GetVariable<int>(variables, "userId"), Is.EqualTo(7));
-                Assert.That(GetVariable<JToken>(variables, "state"), Is.SameAs(state));
+                Assert.That(GetVariable<string>(variables, "state"), Is.EqualTo(state));
             });
         }
 
@@ -85,14 +69,12 @@ namespace FWO.Test
 
         private sealed class CapturingApiConnection : ApiConnection
         {
-            public List<string> Queries { get; } = [];
             public Dictionary<string, object> VariablesByQuery { get; } = [];
             public string ConfigResponseJson { get; set; } = "";
             public string ProviderResponseJson { get; set; } = "";
 
             public override Task<QueryResponseType> SendQueryAsync<QueryResponseType>(string query, object? variables = null, string? operationName = null, QueryChunkingOptions? chunkingOptions = null)
             {
-                Queries.Add(query);
                 if (variables != null)
                 {
                     VariablesByQuery[query] = variables;
@@ -107,11 +89,28 @@ namespace FWO.Test
                 }
                 if (query == AiQueries.saveAiSessionState && typeof(QueryResponseType) == typeof(ReturnIdWrapper))
                 {
-                    ReturnIdWrapper wrapper = new()
-                    {
-                        ReturnIds = [new ReturnId { UpdatedIdLong = GetVariable<long>(variables!, "id") }]
-                    };
+                    ReturnIdWrapper wrapper = new() { ReturnIds = [new ReturnId { UpdatedIdLong = GetVariable<long>(variables!, "id") }] };
                     return Task.FromResult((QueryResponseType)(object)wrapper);
+                }
+                if (query == AiQueries.addAiSession && typeof(QueryResponseType) == typeof(ReturnIdWrapper))
+                {
+                    ReturnIdWrapper wrapper = new() { ReturnIds = [new ReturnId { NewIdLong = 42 }] };
+                    return Task.FromResult((QueryResponseType)(object)wrapper);
+                }
+                if (query == AiQueries.getAiSessionById && typeof(QueryResponseType) == typeof(List<AiSession>))
+                {
+                    object addVariables = VariablesByQuery[AiQueries.addAiSession];
+                    List<AiSession> sessions =
+                    [
+                        new()
+                        {
+                            Id = 42,
+                            UserId = 1,
+                            Name = "Session",
+                            ModelId = GetVariable<string>(addVariables, "modelId")
+                        }
+                    ];
+                    return Task.FromResult((QueryResponseType)(object)sessions);
                 }
                 return Task.FromResult(Activator.CreateInstance<QueryResponseType>());
             }

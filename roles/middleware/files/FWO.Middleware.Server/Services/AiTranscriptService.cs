@@ -10,10 +10,9 @@ namespace FWO.Middleware.Server.Services
     /// Projects the serialized Microsoft Agent Framework session of an AI session into a flat
     /// list of chat messages for display in the assistant timeline.
     /// </summary>
-    public class AiTranscriptService(AiSessionService sessionService, AiSettingsService settingsService, AgentFactoryService agentFactory)
+    public class AiTranscriptService(AiSessionService sessionService, AgentFactoryService agentFactory)
     {
         private readonly AiSessionService sessionService = sessionService;
-        private readonly AiSettingsService settingsService = settingsService;
         private readonly AgentFactoryService agentFactory = agentFactory;
 
         /// <summary>
@@ -32,14 +31,17 @@ namespace FWO.Middleware.Server.Services
                 return [];
             }
 
-            AIAgent? agent = await ResolveAgent(session);
-            if (agent == null)
+            AIAgent agent;
+            try
+            {
+                agent = await agentFactory.GetAgent();
+            }
+            catch (InvalidOperationException)
             {
                 return [];
             }
             using JsonDocument document = JsonDocument.Parse(stateJson);
-            JsonElement normalizedState = AgentSessionJson.PrepareForDeserialize(document.RootElement);
-            AgentSession agentSession = await agent.DeserializeSessionAsync(normalizedState, AgentSessionJson.Options, cancellationToken);
+            AgentSession agentSession = await agent.DeserializeSessionAsync(document.RootElement, AgentSessionJson.Options, cancellationToken);
             List<ChatMessage> messages = agent.GetService<InMemoryChatHistoryProvider>()?.GetMessages(agentSession) ?? [];
 
             return messages
@@ -49,32 +51,9 @@ namespace FWO.Middleware.Server.Services
                 .ToList();
         }
 
-        /// <summary>
-        /// Resolves an agent that can deserialize the session. Session serialization is provider
-        /// independent, so any enabled model works when the session's exact model is unavailable.
-        /// </summary>
-        private async Task<AIAgent?> ResolveAgent(AiSession session)
+        private static string? ExtractState(string state)
         {
-            AiSettings settings = await settingsService.GetSettings();
-            try
-            {
-                (AiProviderConfig provider, AiModelConfig model) = AgentFactoryService.ResolveProviderModel(settings, session.ProviderId, session.ModelId);
-                return agentFactory.GetOrBuildAgent(provider, model);
-            }
-            catch (InvalidOperationException)
-            {
-                AiProviderConfig? fallback = settings.Providers.FirstOrDefault(provider => provider.Enabled && provider.Models.Any(model => model.Enabled));
-                return fallback == null ? null : agentFactory.GetOrBuildAgent(fallback, fallback.Models.First(model => model.Enabled));
-            }
-        }
-
-        private static string? ExtractState(JToken state)
-        {
-            if (state == null || state.Type == JTokenType.Null || (state is JObject jObject && !jObject.HasValues))
-            {
-                return null;
-            }
-            return state.ToString(Newtonsoft.Json.Formatting.None);
+            return string.IsNullOrWhiteSpace(state) ? null : state;
         }
 
         private static string MapRole(ChatRole role)

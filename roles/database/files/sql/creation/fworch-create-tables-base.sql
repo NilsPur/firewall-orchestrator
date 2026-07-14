@@ -552,11 +552,10 @@ Create table "ai_session"
 	"id" BIGSERIAL,
 	"user_id" Integer NOT NULL,
 	"model_id" Varchar NOT NULL Default '',
-	"provider_id" Bigint NOT NULL,
 	"name" Varchar NOT NULL,
 	"created" Timestamp with time zone NOT NULL Default now(),
 	"system_prompt" Text NOT NULL,
-	"state" jsonb NOT NULL Default '{}'::jsonb,
+	"state" Text NOT NULL Default '',
 	primary key ("id")
 );
 

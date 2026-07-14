@@ -98,22 +98,14 @@ builder.Services.AddSingleton<FlowRequestService>();
 builder.Services.AddSingleton<AiSettingsService>();
 builder.Services.AddSingleton<AiSessionService>();
 builder.Services.AddSingleton<AgentFactoryService>();
-builder.Services.AddSingleton<AiOllamaModelService>();
 builder.Services.AddSingleton<AiToolExecutionService>();
 builder.Services.AddSingleton<AiTranscriptService>();
 
-// Run the Ollama model warmup loop as a hosted background service, sharing the singleton
-// instance injected into the controller.
-builder.Services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<AiOllamaModelService>());
-
-// Native AG-UI streaming endpoint: a single routing agent picks the session's fixed provider/model,
-// and FwoAgentSessionStore persists the conversation thread in the ai_session table.
+// Native AG-UI streaming endpoint for the fixed assistant agent.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAGUI();
-builder.Services.AddAIAgent(FwoRoutingAgent.AgentName,
-        (serviceProvider, name) => new FwoRoutingAgent(
-            serviceProvider.GetRequiredService<AgentFactoryService>(),
-            serviceProvider.GetRequiredService<AiSettingsService>()))
+builder.Services.AddAIAgent(AgentFactoryService.AgentName,
+        (serviceProvider, name) => serviceProvider.GetRequiredService<AgentFactoryService>().GetAgent().GetAwaiter().GetResult())
     .WithSessionStore((serviceProvider, name) => new FwoAgentSessionStore(
             serviceProvider.GetRequiredService<AiSessionService>(),
             serviceProvider.GetRequiredService<IHttpContextAccessor>()),
@@ -183,8 +175,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Native AG-UI streaming endpoint for the assistant runs (replaces the former custom SSE controller).
-app.MapAGUI(FwoRoutingAgent.AgentName, "/api/Ai/Runs/AgUi").RequireAuthorization();
+// Native AG-UI streaming endpoint for the assistant runs.
+app.MapAGUI(AgentFactoryService.AgentName, "/api/Ai/Runs/AgUi").RequireAuthorization();
 
 //Register JobExecutionTracker with scheduler
 ISchedulerFactory schedulerFactory = app.Services.GetRequiredService<ISchedulerFactory>();

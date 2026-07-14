@@ -1,13 +1,12 @@
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System.Text.Json.Serialization;
 
 namespace FWO.Data.Ai
 {
     /// <summary>
     /// An AI assistant chat session. Conversation history is persisted as the opaque serialized
-    /// Microsoft Agent Framework session in <see cref="State"/>; provider and model are fixed when
-    /// the session is created.
+    /// Microsoft Agent Framework session in <see cref="State"/>; the model is fixed when the
+    /// session is created.
     /// </summary>
     public class AiSession
     {
@@ -29,9 +28,6 @@ namespace FWO.Data.Ai
         [JsonProperty("model_id"), JsonPropertyName("model_id")]
         public string ModelId { get; set; } = "";
 
-        [JsonProperty("provider_id"), JsonPropertyName("provider_id")]
-        public long ProviderId { get; set; }
-
         /// <summary>
         /// The serialized Microsoft Agent Framework session (chat history and thread state).
         /// Populated from the database via GraphQL and used server-side only; it is never exposed
@@ -39,7 +35,7 @@ namespace FWO.Data.Ai
         /// </summary>
         [JsonProperty("state")]
         [System.Text.Json.Serialization.JsonIgnore]
-        public JToken State { get; set; } = new JObject();
+        public string State { get; set; } = "";
     }
 
     /// <summary>

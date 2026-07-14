@@ -7,7 +7,6 @@ using Microsoft.Extensions.AI;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace FWO.Test
 {
@@ -15,14 +14,13 @@ namespace FWO.Test
     public class AiSessionJsonTest
     {
         [Test]
-        public void AiSession_DeserializesStateFromGraphQl()
+        public void AiSession_DeserializesRawStateFromGraphQl()
         {
             JObject payload = JObject.Parse("""
             {
               "id": 1,
               "user_id": 7,
-              "provider_id": 3,
-              "state": { "messages": [ { "role": "user", "content": "hello" } ] }
+              "state": "{\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}"
             }
             """);
 
@@ -30,8 +28,7 @@ namespace FWO.Test
 
             Assert.Multiple(() =>
             {
-                Assert.That(session.ProviderId, Is.EqualTo(3));
-                Assert.That(session.State["messages"]?[0]?["content"]?.Value<string>(), Is.EqualTo("hello"));
+                Assert.That(session.State, Does.Contain("hello"));
             });
         }
 
@@ -42,46 +39,23 @@ namespace FWO.Test
             {
                 Id = 1,
                 UserId = 7,
-                ProviderId = 3,
-                State = JObject.Parse("{\"messages\":[]}")
+                State = "{\"messages\":[]}"
             };
 
             string serialized = JsonSerializer.Serialize(session);
 
-            // The opaque framework state is server-side only and must never be exposed over REST.
             Assert.That(serialized, Does.Not.Contain("\"state\""));
             Assert.That(serialized, Does.Not.Contain("messages"));
         }
 
         [Test]
-        public void SaveAiSessionState_QueryUsesStateVariable()
+        public void SaveAiSessionState_QueryUsesStringStateVariable()
         {
-            Assert.That(AiQueries.saveAiSessionState, Does.Contain("$state: jsonb!"));
+            Assert.That(AiQueries.saveAiSessionState, Does.Contain("$state: String!"));
             Assert.That(AiQueries.saveAiSessionState, Does.Contain("$userId: Int!"));
             Assert.That(AiQueries.saveAiSessionState, Does.Contain("user_id: {_eq: $userId}"));
             Assert.That(AiQueries.saveAiSessionState, Does.Contain("state: $state"));
-            Assert.That(AiQueries.saveAiSessionState, Does.Not.Contain("last_updated"));
-        }
-
-        [Test]
-        public void AgentSessionJson_AllowsJsonbReorderedTypeMetadata()
-        {
-            const string jsonbReorderedJson = """{"value":"hello","$type":"derived"}""";
-
-            Assert.Catch(() => JsonSerializer.Deserialize<PolymorphicBase>(jsonbReorderedJson));
-
-            using JsonDocument document = JsonDocument.Parse(jsonbReorderedJson);
-            JsonElement normalized = AgentSessionJson.PrepareForDeserialize(document.RootElement);
-            PolymorphicBase? deserialized = JsonSerializer.Deserialize<PolymorphicBase>(normalized, AgentSessionJson.Options);
-
-            Assert.That(deserialized, Is.TypeOf<PolymorphicDerived>());
-            Assert.That(deserialized?.Value, Is.EqualTo("hello"));
-        }
-
-        [Test]
-        public void AgentSessionJson_UsesReflectionMetadataResolver()
-        {
-            Assert.That(AgentSessionJson.Options.TypeInfoResolver, Is.Not.Null);
+            Assert.That(AiQueries.saveAiSessionState, Does.Not.Contain("jsonb"));
         }
 
         [Test]
@@ -107,49 +81,27 @@ namespace FWO.Test
         }
 
         [Test]
-        public void FwoRoutingAgent_PrependsConfiguredPromptAsSystemMessage()
+        public void BuildChatOptions_UsesConfiguredPromptAsInstructions()
         {
-            List<ChatMessage> messages = [new(ChatRole.User, "hello")];
+            ChatOptions options = AgentFactoryService.BuildChatOptions(new AiModelConfig(), null, "configured prompt");
 
-            List<ChatMessage> routedMessages = FwoRoutingAgent.PrependSystemPrompt(messages, "configured prompt");
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(routedMessages, Has.Count.EqualTo(2));
-                Assert.That(routedMessages[0].Role, Is.EqualTo(ChatRole.System));
-                Assert.That(routedMessages[0].Text, Is.EqualTo("configured prompt"));
-                Assert.That(routedMessages[1].Role, Is.EqualTo(ChatRole.User));
-            });
+            Assert.That(options.Instructions, Is.EqualTo("configured prompt"));
         }
 
         [Test]
-        public void RenameAiSession_QueryUsesRenameOperationName()
-        {
-            Assert.That(AiQueries.renameAiSession, Does.Contain("mutation renameAiSession"));
-            Assert.That(AiQueries.renameAiSession, Does.Contain("update_ai_session_by_pk"));
-        }
-
-        [Test]
-        public void DeleteAiSession_QueryUsesRealDelete()
-        {
-            Assert.That(AiQueries.deleteAiSession, Does.Contain("delete_ai_session_by_pk"));
-            Assert.That(AiQueries.deleteAiSession, Does.Not.Contain("update_ai_session_by_pk"));
-            Assert.That(AiQueries.deleteAiSession, Does.Not.Contain("deleted: true"));
-        }
-
-        [Test]
-        public async Task SaveState_SendsStateVariable()
+        public async Task SaveState_SendsRawStateVariable()
         {
             AiSessionTestApiConnection apiConnection = new();
             AiSessionService service = new(apiConnection, new AiSettingsService(apiConnection));
+            const string state = "{\"messages\":[]}";
 
-            bool saved = await service.SaveState(5, 7, JObject.Parse("{\"messages\":[]}"));
+            bool saved = await service.SaveState(5, 7, state);
 
             Assert.That(saved, Is.True);
             Assert.That(apiConnection.LastQuery, Is.EqualTo(AiQueries.saveAiSessionState));
             Assert.That(GetVariable<long>(apiConnection.LastVariables!, "id"), Is.EqualTo(5));
             Assert.That(GetVariable<int>(apiConnection.LastVariables!, "userId"), Is.EqualTo(7));
-            Assert.That(GetVariable<JToken>(apiConnection.LastVariables!, "state"), Is.Not.Null);
+            Assert.That(GetVariable<string>(apiConnection.LastVariables!, "state"), Is.EqualTo(state));
         }
 
         [Test]
@@ -179,50 +131,6 @@ namespace FWO.Test
             Assert.That(GetVariable<long>(apiConnection.LastVariables!, "id"), Is.EqualTo(5));
         }
 
-        [Test]
-        public void ResolveProviderModel_ReturnsEnabledProviderAndModel()
-        {
-            AiSettings settings = BuildSettings(providerEnabled: true, modelEnabled: true);
-
-            (AiProviderConfig provider, AiModelConfig model) = AgentFactoryService.ResolveProviderModel(settings, 1, "llama");
-
-            Assert.That(provider.Kind, Is.EqualTo(AiProviderKind.Ollama));
-            Assert.That(model.ModelId, Is.EqualTo("llama"));
-        }
-
-        [Test]
-        public void ResolveProviderModel_ThrowsWhenModelDisabled()
-        {
-            AiSettings settings = BuildSettings(providerEnabled: true, modelEnabled: false);
-
-            Assert.Throws<InvalidOperationException>(() => AgentFactoryService.ResolveProviderModel(settings, 1, "llama"));
-        }
-
-        [Test]
-        public void ResolveModelSelection_ReturnsProviderForEnabledModelOnly()
-        {
-            Assert.That(AiSettingsService.ResolveModelSelection(BuildSettings(providerEnabled: true, modelEnabled: true), 1, "llama")?.Provider.Kind, Is.EqualTo(AiProviderKind.Ollama));
-            Assert.That(AiSettingsService.ResolveModelSelection(BuildSettings(providerEnabled: true, modelEnabled: false), 1, "llama"), Is.Null);
-            Assert.That(AiSettingsService.ResolveModelSelection(BuildSettings(providerEnabled: false, modelEnabled: true), 1, "llama"), Is.Null);
-        }
-
-        private static AiSettings BuildSettings(bool providerEnabled, bool modelEnabled)
-        {
-            return new AiSettings
-            {
-                Providers =
-                [
-                    new AiProviderConfig
-                    {
-                        Id = 1,
-                        Kind = AiProviderKind.Ollama,
-                        Enabled = providerEnabled,
-                        Models = [new AiModelConfig { ModelId = "llama", ProviderKind = AiProviderKind.Ollama, Enabled = modelEnabled }]
-                    }
-                ]
-            };
-        }
-
         private static T GetVariable<T>(object variables, string name)
         {
             object? value = variables.GetType().GetProperty(name)?.GetValue(variables);
@@ -230,21 +138,9 @@ namespace FWO.Test
             return (T)value!;
         }
 
-        [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-        [JsonDerivedType(typeof(PolymorphicDerived), "derived")]
-        private abstract class PolymorphicBase
-        {
-            public string Value { get; set; } = "";
-        }
-
-        private sealed class PolymorphicDerived : PolymorphicBase
-        {
-        }
-
         private sealed class AiSessionTestApiConnection : ApiConnection
         {
             public string LastQuery { get; private set; } = "";
-
             public object? LastVariables { get; private set; }
 
             public override Task<QueryResponseType> SendQueryAsync<QueryResponseType>(
@@ -282,50 +178,21 @@ namespace FWO.Test
                     : new ReturnIdWrapper { ReturnIds = [new ReturnId { NewIdLong = 42 }] };
             }
 
-            public override void SetAuthHeader(string jwt)
-            {
-            }
-
-            public override Task ReconnectSubscriptionsAsync(string jwt, CancellationToken ct)
-            {
-                return Task.CompletedTask;
-            }
-
-            public override void SetRole(string role)
-            {
-            }
-
-            public override void SetBestRole(System.Security.Claims.ClaimsPrincipal user, List<string> targetRoleList)
-            {
-            }
-
-            public override void SwitchBack()
-            {
-            }
-
+            public override void SetAuthHeader(string jwt) { }
+            public override Task ReconnectSubscriptionsAsync(string jwt, CancellationToken ct) => Task.CompletedTask;
+            public override void SetRole(string role) { }
+            public override void SetBestRole(System.Security.Claims.ClaimsPrincipal user, List<string> targetRoleList) { }
+            public override void SwitchBack() { }
             public override Task<ApiResponse<QueryResponseType>> SendQuerySafeAsync<QueryResponseType>(
-                string query, object? variables = null, string? operationName = null)
-            {
-                throw new NotImplementedException();
-            }
-
+                string query, object? variables = null, string? operationName = null) => throw new NotImplementedException();
             public override GraphQlApiSubscription<SubscriptionResponseType> GetSubscription<SubscriptionResponseType>(
                 Action<Exception> exceptionHandler,
                 GraphQlApiSubscription<SubscriptionResponseType>.SubscriptionUpdate subscriptionUpdateHandler,
                 string subscription,
                 object? variables = null,
-                string? operationName = null)
-            {
-                throw new NotImplementedException();
-            }
-
-            public override void DisposeSubscriptions<T>()
-            {
-            }
-
-            protected override void Dispose(bool disposing)
-            {
-            }
+                string? operationName = null) => throw new NotImplementedException();
+            public override void DisposeSubscriptions<T>() { }
+            protected override void Dispose(bool disposing) { }
 
             private static T GetOptionalVariable<T>(object? variables, string name)
             {

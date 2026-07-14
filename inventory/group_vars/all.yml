@@ -107,12 +107,6 @@ middleware_hostname: "127.0.0.1"
 ldif_changetype: add
 middleware_service_name: "{{ product_name }}-middleware"
 openldap_server_enable_ssl: true
-ai_ollama_service_name: "{{ product_name }}-ollama"
-ai_ollama_container_name: "{{ product_name }}-ollama"
-ai_ollama_image: "docker.io/ollama/ollama:0.30.10"
-ai_ollama_host: "127.0.0.1"
-ai_ollama_port: 11434
-ai_ollama_models_dir: "{{ fworch_home }}/ai/ollama"
 
 # middleware web server
 middleware_web_listener_port: 8888

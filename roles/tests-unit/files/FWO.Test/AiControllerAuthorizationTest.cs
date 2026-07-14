@@ -9,11 +9,10 @@ namespace FWO.Test;
 [TestFixture]
 internal class AiControllerAuthorizationTest
 {
-    [TestCase(nameof(AiController.TestProvider))]
-    [TestCase(nameof(AiController.TestModel))]
-    public void AiConfigurationTestEndpoints_RemainAdminOnly(string methodName)
+    [Test]
+    public void AiProviderTestEndpoint_RemainsAdminOnly()
     {
-        AuthorizeAttribute authorize = GetAuthorizeAttribute(methodName);
+        AuthorizeAttribute authorize = GetAuthorizeAttribute(nameof(AiController.TestProvider));
 
         Assert.That(authorize.Roles, Is.EqualTo(Roles.Admin));
     }

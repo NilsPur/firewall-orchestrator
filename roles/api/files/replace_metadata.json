@@ -35481,8 +35481,7 @@
                       "name",
                       "created",
                       "system_prompt",
-                      "model_id",
-                      "provider_id"
+                      "model_id"
                     ]
                   }
                 }
@@ -35506,7 +35505,6 @@
                       "created",
                       "system_prompt",
                       "model_id",
-                      "provider_id",
                       "state"
                     ],
                     "filter": {}
@@ -35521,7 +35519,6 @@
                     "columns": [
                       "name",
                       "model_id",
-                      "provider_id",
                       "state"
                     ],
                     "check": {}

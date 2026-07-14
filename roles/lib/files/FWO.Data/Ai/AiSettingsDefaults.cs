@@ -2,58 +2,49 @@ namespace FWO.Data.Ai
 {
     public static class AiSettingsDefaults
     {
+        public const long ProviderId = 1;
+        public const string ProviderDisplayName = "OpenAI";
+        public const string ApiKeyEnvVariable = "OPENAI_API_KEY";
+        public const string ModelId = "gpt-5.4-mini";
+        public const string ModelDisplayName = "GPT-5.4 mini";
+
         public static readonly Newtonsoft.Json.JsonSerializerSettings JsonSerializerSettings = new()
         {
             ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace
         };
 
         public const string SystemPrompt = "You are the Firewall Orchestrator assistant. Answer using the user's FWO access scope. Ground factual answers in data returned by FWO tools instead of assumptions. Use the appropriate read-only tool before answering factual FWO questions, and state when tool data is missing or insufficient.";
-        public static readonly List<string> RecommendedOllamaModels =
-        [
-            "qwen3.5:2b",
-            "qwen3.5:4b",
-            "qwen3.5:9b",
-            "qwen3.6:27b",
-            "gemma4:12b",
-            "gemma4:31b"
-        ];
 
-        public static List<AiProviderConfig> CreateProviders()
+        public static AiProviderConfig CreateProvider()
         {
-            return
-            [
-                new()
-                {
-                    DisplayName = "Ollama",
-                    Kind = AiProviderKind.Ollama,
-                    EndpointUrl = "http://127.0.0.1:11434",
-                    Enabled = true
-                },
-                new()
-                {
-                    DisplayName = "OpenAI",
-                    Kind = AiProviderKind.OpenAi,
-                    ApiKeyEnvVariable = "OPENAI_API_KEY"
-                },
-                new()
-                {
-                    DisplayName = "Anthropic",
-                    Kind = AiProviderKind.Anthropic,
-                    ApiKeyEnvVariable = "ANTHROPIC_API_KEY"
-                },
-                new()
-                {
-                    DisplayName = "Google",
-                    Kind = AiProviderKind.Google,
-                    ApiKeyEnvVariable = "GOOGLE_API_KEY"
-                },
-                new()
-                {
-                    DisplayName = "OpenAI-compatible",
-                    Kind = AiProviderKind.OpenAiCompatible
-                }
-            ];
+            return new()
+            {
+                Id = ProviderId,
+                DisplayName = ProviderDisplayName,
+                Kind = AiProviderKind.OpenAi,
+                ApiKeyEnvVariable = ApiKeyEnvVariable,
+                Enabled = true
+            };
         }
 
+        public static AiModelConfig CreateModel()
+        {
+            return new()
+            {
+                DisplayName = ModelDisplayName,
+                ModelId = ModelId,
+                ProviderId = ProviderId,
+                ProviderDisplayName = ProviderDisplayName,
+                ProviderKind = AiProviderKind.OpenAi,
+                Enabled = true,
+                StreamingSupported = true,
+                ToolCallsSupported = true,
+                VisionSupported = false,
+                ReasoningSupported = true,
+                ContextSize = 400000,
+                MaxOutputTokens = 128000,
+                ReasoningEffort = ReasoningEffort.Medium
+            };
+        }
     }
 }

@@ -3,7 +3,6 @@ using FWO.Api.Client.Queries;
 using FWO.Data;
 using FWO.Data.Ai;
 using FWO.Logging;
-using Newtonsoft.Json.Linq;
 
 namespace FWO.Middleware.Server.Services
 {
@@ -37,21 +36,19 @@ namespace FWO.Middleware.Server.Services
         /// Creates a new AI session for a user.
         /// </summary>
         /// <exception cref="InvalidOperationException">No enabled AI model is configured.</exception>
-        public async Task<AiSession> CreateSession(int userId, string? name, long providerId, string? modelId)
+        public async Task<AiSession> CreateSession(int userId, string? name)
         {
             AiSettings settings = await settingsService.GetSettings();
-            (AiProviderConfig Provider, AiModelConfig Model) selection = AiSettingsService.ResolveModelSelection(settings, providerId, modelId)
+            (AiProviderConfig Provider, AiModelConfig Model) selection = AiSettingsService.ResolveModel(settings)
                 ?? throw new InvalidOperationException("No enabled AI model is configured.");
             string resolvedModel = selection.Model.ModelId;
-            long resolvedProviderId = selection.Provider.Id;
             string sessionName = string.IsNullOrWhiteSpace(name) ? "New assistant session" : name.Trim();
             ReturnIdWrapper wrapper = await apiConnection.SendQueryAsync<ReturnIdWrapper>(AiQueries.addAiSession, new
             {
                 userId,
                 name = sessionName,
                 systemPrompt = settings.SystemPrompt,
-                modelId = resolvedModel,
-                providerId = resolvedProviderId
+                modelId = resolvedModel
             });
             long sessionId = wrapper.ReturnIds?.FirstOrDefault()?.NewIdLong ?? 0;
             return await GetSession(sessionId, userId) ?? new AiSession
@@ -59,8 +56,7 @@ namespace FWO.Middleware.Server.Services
                 Id = sessionId,
                 UserId = userId,
                 Name = sessionName,
-                ModelId = resolvedModel,
-                ProviderId = resolvedProviderId
+                ModelId = resolvedModel
             };
         }
 
@@ -97,7 +93,7 @@ namespace FWO.Middleware.Server.Services
         /// Persists the serialized Microsoft Agent Framework session state for a session.
         /// Ownership is enforced in the mutation so a stale or forged session id cannot update another user's session state.
         /// </summary>
-        public async Task<bool> SaveState(long sessionId, int userId, JToken state)
+        public async Task<bool> SaveState(long sessionId, int userId, string state)
         {
             ReturnIdWrapper result = await apiConnection.SendQueryAsync<ReturnIdWrapper>(AiQueries.saveAiSessionState, new
             {

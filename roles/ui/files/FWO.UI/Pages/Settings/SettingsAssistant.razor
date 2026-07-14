@@ -1,6 +1,5 @@
 @page "/settings/assistant"
 @using FWO.Middleware.Client
-@implements IDisposable
 
 @inject MiddlewareClient MiddlewareClient
 @inject UserConfig userConfig
@@ -21,218 +20,94 @@ else
             <label class="form-label">@(userConfig.GetText("system_prompt"))</label>
             <textarea class="form-control" rows="4" @bind="Settings.SystemPrompt" disabled="@ReadOnly"></textarea>
         </div>
-        <div class="col-12 col-md-4">
-            <label class="form-label">@(userConfig.GetText("model"))</label>
-            <select class="form-select" @bind="Settings.InitialModelId" disabled="@ReadOnly">
-                <option value="">@(userConfig.GetText("please_select"))</option>
-                @foreach (AiProviderConfig provider in Settings.Providers)
+        <div class="col-12">
+            <h4>@(userConfig.GetText("provider"))</h4>
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label">@(userConfig.GetText("name"))</label>
+            <input class="form-control" @bind="Settings.Provider.DisplayName" disabled="@ReadOnly" />
+        </div>
+        <div class="col-12 col-md-2">
+            <label class="form-label">@(userConfig.GetText("provider"))</label>
+            <select class="form-select" @bind="Settings.Provider.Kind" disabled="@ReadOnly">
+                @foreach (AiProviderKind kind in Enum.GetValues<AiProviderKind>())
                 {
-                    @foreach (AiModelConfig model in provider.Models)
-                    {
-                        <option value="@AiModelConfig.BuildSelectionId(provider.Id, model.ModelId)">@provider.DisplayName - @model.DisplayName (@model.ModelId)</option>
-                    }
+                    <option value="@kind">@kind</option>
+                }
+            </select>
+        </div>
+        <div class="col-12 col-md-5">
+            <label class="form-label">@(userConfig.GetText("endpoint"))</label>
+            <input class="form-control" @bind="Settings.Provider.EndpointUrl" disabled="@ReadOnly" />
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label">@(userConfig.GetText("api_key_env_variable"))</label>
+            <input class="form-control" @bind="Settings.Provider.ApiKeyEnvVariable" disabled="@ReadOnly" />
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label">@(userConfig.GetText("timeout_seconds"))</label>
+            <input class="form-control" type="number" min="1" @bind="Settings.Provider.TimeoutSeconds" disabled="@ReadOnly" />
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label">@(userConfig.GetText("max_retries"))</label>
+            <input class="form-control" type="number" min="0" @bind="Settings.Provider.MaxRetries" disabled="@ReadOnly" />
+        </div>
+        <div class="col-12">
+            <h4>@(userConfig.GetText("model"))</h4>
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label">@(userConfig.GetText("name"))</label>
+            <input class="form-control" @bind="Settings.Model.DisplayName" disabled="@ReadOnly" />
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label">@(userConfig.GetText("model"))</label>
+            <input class="form-control" @bind="Settings.Model.ModelId" disabled="@ReadOnly" />
+        </div>
+        <div class="col-12 col-md-6">
+            <label class="form-label">@(userConfig.GetText("capabilities"))</label>
+            <div>
+                <label class="form-check-label me-3"><input type="checkbox" @bind="Settings.Model.StreamingSupported" disabled="@ReadOnly" /> @(userConfig.GetText("streaming"))</label>
+                <label class="form-check-label me-3"><input type="checkbox" @bind="Settings.Model.ToolCallsSupported" disabled="@ReadOnly" /> @(userConfig.GetText("tool_calls"))</label>
+                <label class="form-check-label me-3"><input type="checkbox" @bind="Settings.Model.VisionSupported" disabled="@ReadOnly" /> @(userConfig.GetText("vision"))</label>
+                <label class="form-check-label me-3"><input type="checkbox" @bind="Settings.Model.ReasoningSupported" disabled="@ReadOnly" /> @(userConfig.GetText("reasoning"))</label>
+            </div>
+        </div>
+        <div class="col-12">
+            <label class="form-label mb-0">@(userConfig.GetText("generation_parameters"))</label>
+        </div>
+        <div class="col-6 col-md-2">
+            <input class="form-control" type="number" placeholder="@(userConfig.GetText("context_size"))" @bind="Settings.Model.ContextSize" disabled="@ReadOnly" />
+        </div>
+        <div class="col-6 col-md-2">
+            <input class="form-control" type="number" step="0.01" placeholder="@(userConfig.GetText("temperature"))" @bind="Settings.Model.Temperature" disabled="@ReadOnly" />
+        </div>
+        <div class="col-6 col-md-2">
+            <input class="form-control" type="number" step="0.01" placeholder="@(userConfig.GetText("top_p"))" @bind="Settings.Model.TopP" disabled="@ReadOnly" />
+        </div>
+        <div class="col-6 col-md-2">
+            <input class="form-control" type="number" placeholder="@(userConfig.GetText("top_k"))" @bind="Settings.Model.TopK" disabled="@ReadOnly" />
+        </div>
+        <div class="col-6 col-md-2">
+            <input class="form-control" type="number" placeholder="@(userConfig.GetText("max_output_tokens"))" @bind="Settings.Model.MaxOutputTokens" disabled="@ReadOnly" />
+        </div>
+        <div class="col-6 col-md-2">
+            <select class="form-select" @bind="Settings.Model.ReasoningEffort" disabled="@ReadOnly">
+                @foreach (ReasoningEffort effort in ReasoningEfforts)
+                {
+                    <option value="@effort">@effort</option>
                 }
             </select>
         </div>
     </div>
 
-    <hr />
-
-    <h4>@(userConfig.GetText("ollama_models"))</h4>
-    <div class="mb-2">
-        <div class="small text-muted">@(userConfig.GetText("recommended_models"))</div>
-        <div class="d-flex flex-wrap gap-2">
-            @foreach (string modelId in AiSettingsDefaults.RecommendedOllamaModels)
-            {
-                <button class="btn btn-sm btn-outline-primary" @onclick="() => DownloadOllamaModel(modelId)" disabled="@ReadOnly">
-                    <span class="@Icons.Download"></span> @modelId
-                </button>
-            }
-        </div>
+    <div class="mt-3 mb-4 d-flex gap-2">
+        <button class="btn btn-primary" @onclick="Save" disabled="@ReadOnly">
+            <span class="@Icons.Save"></span> @(userConfig.GetText("save"))
+        </button>
+        <button class="btn btn-outline-primary" @onclick="TestProvider" disabled="@ReadOnly">
+            <span class="@Icons.TestConnection"></span> @(userConfig.GetText("test_connection"))
+        </button>
     </div>
-    <div class="row g-2 align-items-end mb-3">
-        <div class="col-12 col-md-6">
-            <label class="form-label">@(userConfig.GetText("model"))</label>
-            <div class="input-group">
-                <input class="form-control" @bind="NewOllamaModelId" disabled="@ReadOnly" />
-                <button class="btn btn btn-primary" @onclick="DownloadOllamaModel" disabled="@ReadOnly">
-                    <span class="@Icons.Download"></span> @(userConfig.GetText("download"))
-                </button>
-            </div>
-        </div>
-    </div>
-    @if (OllamaModels.Downloads.Count > 0)
-    {
-        <h5>@(userConfig.GetText("ollama_model_downloads"))</h5>
-        <div class="table-responsive mb-3">
-            <table class="table table-sm table-bordered">
-                <thead>
-                    <tr>
-                        <th>@(userConfig.GetText("model"))</th>
-                        <th>@(userConfig.GetText("status"))</th>
-                        <th>@(userConfig.GetText("progress"))</th>
-                        <th>@(userConfig.GetText("actions"))</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (AiOllamaModelState model in OllamaModels.Downloads)
-                    {
-                        <tr>
-                            <td>@model.ModelId</td>
-                            <td>@model.DownloadStatus</td>
-                            <td>@model.DownloadProgress%</td>
-                            <td>
-                                @if (model.DownloadStatus == AiOllamaModelState.kStatusDownloading)
-                                {
-                                    <button class="btn btn-sm btn-warning" @onclick="() => CancelDownloadOllamaModel(model.ModelId)" disabled="@ReadOnly">
-                                        <span class="@Icons.Cancel"></span> @(userConfig.GetText("cancel"))
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => DownloadOllamaModel(model.ModelId)" disabled="@ReadOnly">
-                                        <span class="@Icons.Download"></span> @(userConfig.GetText("download"))
-                                    </button>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-
-    <h5>@(userConfig.GetText("downloaded_ollama_models"))</h5>
-    <div class="table-responsive mb-3">
-        <table class="table table-sm table-bordered">
-            <thead>
-                <tr>
-                    <th>@(userConfig.GetText("model"))</th>
-                    <th>@(userConfig.GetText("actions"))</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (AiOllamaModelState model in OllamaModels.DownloadedModels)
-                {
-                    <tr>
-                        <td>@model.ModelId</td>
-                        <td>
-                            <button class="btn btn-sm btn-danger" @onclick="() => RequestDeleteOllamaModel(model.ModelId)" disabled="@ReadOnly">
-                                <span class="@Icons.Delete"></span> @(userConfig.GetText("delete"))
-                            </button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-
-    <h4>@(userConfig.GetText("provider"))</h4>
-    @foreach (AiProviderConfig provider in Settings.Providers)
-    {
-        <div class="border rounded p-3 mb-3">
-            <div class="row g-2 align-items-end">
-                <div class="col-12 col-md-3">
-                    <label class="form-label">@(userConfig.GetText("name"))</label>
-                    <input class="form-control" @bind="provider.DisplayName" disabled="@ReadOnly" />
-                </div>
-                <div class="col-12 col-md-2">
-                    <label class="form-label">@(userConfig.GetText("provider"))</label>
-                    <input class="form-control" value="@provider.Kind" disabled />
-                </div>
-                <div class="col-12 col-md-5">
-                    <label class="form-label">@(userConfig.GetText("endpoint"))</label>
-                    <input class="form-control" @bind="provider.EndpointUrl" disabled="@ReadOnly" />
-                </div>
-                <div class="col-12 col-md-3">
-                    <label class="form-label">@(userConfig.GetText("api_key_env_variable"))</label>
-                    <input class="form-control" @bind="provider.ApiKeyEnvVariable" disabled="@ReadOnly" />
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label">@(userConfig.GetText("timeout_seconds"))</label>
-                    <input class="form-control" type="number" min="1" @bind="provider.TimeoutSeconds" disabled="@ReadOnly" />
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label">@(userConfig.GetText("max_retries"))</label>
-                    <input class="form-control" type="number" min="0" @bind="provider.MaxRetries" disabled="@ReadOnly" />
-                </div>
-                <div class="col-6 col-md-1">
-                    <label class="form-label">@(userConfig.GetText("enabled"))</label>
-                    <input class="form-check-input d-block" type="checkbox" @bind="provider.Enabled" disabled="@ReadOnly" />
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label">@(userConfig.GetText("model"))</label>
-                    <div class="input-group">
-                        <input class="form-control" @bind="NewModelId[provider.Id]" disabled="@ReadOnly" />
-                        <button class="btn btn-sm btn-secondary" @onclick="() => AddModel(provider)" disabled="@ReadOnly">
-                            <span class="@Icons.Add"></span>
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary" @onclick="() => TestProvider(provider)" disabled="@ReadOnly">
-                            <span class="@Icons.TestConnection"></span> @(userConfig.GetText("test_connection"))
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="table-responsive mt-3">
-                <table class="table table-sm table-bordered">
-                    <thead>
-                        <tr>
-                            <th>@(userConfig.GetText("name"))</th>
-                            <th>@(userConfig.GetText("model"))</th>
-                            <th>@(userConfig.GetText("capabilities"))</th>
-                            <th>@(userConfig.GetText("generation_parameters"))</th>
-                            <th>@(userConfig.GetText("enabled"))</th>
-                            <th>@(userConfig.GetText("actions"))</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (AiModelConfig model in provider.Models)
-                        {
-                            <tr>
-                                <td><input class="form-control form-control-sm" @bind="model.DisplayName" disabled="@ReadOnly" /></td>
-                                <td><input class="form-control form-control-sm" @bind="model.ModelId" disabled="@ReadOnly" /></td>
-                                <td>
-                                    <label class="form-check-label me-2"><input type="checkbox" @bind="model.StreamingSupported" disabled="@ReadOnly" /> @(userConfig.GetText("streaming"))</label>
-                                    <label class="form-check-label me-2"><input type="checkbox" @bind="model.ToolCallsSupported" disabled="@ReadOnly" /> @(userConfig.GetText("tool_calls"))</label>
-                                    <label class="form-check-label me-2"><input type="checkbox" @bind="model.VisionSupported" disabled="@ReadOnly" /> @(userConfig.GetText("vision"))</label>
-                                    <label class="form-check-label me-2"><input type="checkbox" @bind="model.ReasoningSupported" disabled="@ReadOnly" /> @(userConfig.GetText("reasoning"))</label>
-                                </td>
-                                <td>
-                                    <div class="row g-1">
-                                        <div class="col-6"><input class="form-control form-control-sm" type="number" placeholder="@(userConfig.GetText("context_size"))" @bind="model.ContextSize" disabled="@ReadOnly" /></div>
-                                        <div class="col-6"><input class="form-control form-control-sm" type="number" step="0.01" placeholder="@(userConfig.GetText("temperature"))" @bind="model.Temperature" disabled="@ReadOnly" /></div>
-                                        <div class="col-6"><input class="form-control form-control-sm" type="number" step="0.01" placeholder="@(userConfig.GetText("top_p"))" @bind="model.TopP" disabled="@ReadOnly" /></div>
-                                        <div class="col-6"><input class="form-control form-control-sm" type="number" placeholder="@(userConfig.GetText("top_k"))" @bind="model.TopK" disabled="@ReadOnly" /></div>
-                                        <div class="col-6"><input class="form-control form-control-sm" type="number" placeholder="@(userConfig.GetText("max_output_tokens"))" @bind="model.MaxOutputTokens" disabled="@ReadOnly" /></div>
-                                        <div class="col-6"><input class="form-control form-control-sm" placeholder="@(userConfig.GetText("reasoning_effort"))" @bind="model.ReasoningEffort" disabled="@ReadOnly" /></div>
-                                    </div>
-                                </td>
-                                <td><input type="checkbox" @bind="model.Enabled" disabled="@ReadOnly" /></td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => TestModel(provider, model)" disabled="@ReadOnly">
-                                        <span class="@Icons.TestConnection"></span> @(userConfig.GetText("test_connection"))
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RequestRemoveModel(provider, model)" disabled="@ReadOnly">
-                                        <span class="@Icons.Delete"></span>
-                                    </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    }
-
-    <button class="btn btn-primary mb-4" @onclick="Save" disabled="@ReadOnly">
-        <span class="@Icons.Save"></span> @(userConfig.GetText("save"))
-    </button>
-
-    <ConfirmDelete @bind-Display="DeleteModelMode" PerformAction="DeleteConfirmedOllamaModel" Title="@userConfig.GetText("delete_model")"
-        DeleteMessage="@DeleteModelMessage" />
-    <ConfirmDelete @bind-Display="RemoveModelMode" PerformAction="RemoveConfirmedModel" Title="@userConfig.GetText("remove_model")"
-        DeleteMessage="@RemoveModelMessage" Remove="true" />
 }
 
 @code {
@@ -240,95 +115,18 @@ else
     private Action<Exception?, string, string, bool> DisplayMessageInUi { get; set; } = DefaultInit.DoNothing;
 
     private AiSettings? Settings { get; set; }
-    private string NewOllamaModelId { get; set; } = "";
-    private Dictionary<long, string> NewModelId { get; set; } = [];
-    private AiOllamaModelsResponse OllamaModels { get; set; } = new();
-    private HashSet<string> PendingOllamaDownloadHints { get; set; } = [];
-    private bool DeleteModelMode { get; set; }
-    private string DeleteModelMessage { get; set; } = "";
-    private string ModelIdToDelete { get; set; } = "";
-    private bool RemoveModelMode { get; set; }
-    private string RemoveModelMessage { get; set; } = "";
-    private AiProviderConfig? ProviderOfModelToRemove { get; set; }
-    private AiModelConfig? ModelToRemove { get; set; }
-    private CancellationTokenSource? OllamaRefreshCancellation { get; set; }
     private bool ReadOnly => !userConfig.User.Roles.Contains(Roles.Admin);
+    internal static IReadOnlyList<ReasoningEffort> ReasoningEfforts { get; } = Enum.GetValues<ReasoningEffort>();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadSettings();
-        await RefreshOllamaModels();
-        StartOllamaRefreshLoopIfNeeded();
     }
 
     private async Task LoadSettings()
     {
         var response = await MiddlewareClient.GetAiSettings();
         Settings = response.IsSuccessful && response.Data != null ? response.Data : new AiSettings();
-        Settings.InitialModelId = FindSettingsSelectionId(Settings.InitialModelId) ?? "";
-        foreach (AiProviderConfig provider in Settings.Providers)
-        {
-            NewModelId.TryAdd(provider.Id, "");
-        }
-    }
-
-    private string? FindSettingsSelectionId(string? selectionId)
-    {
-        if (Settings == null)
-        {
-            return null;
-        }
-        return Settings.Providers
-            .SelectMany(provider => provider.Models.Select(model => new
-            {
-                SelectionId = AiModelConfig.BuildSelectionId(provider.Id, model.ModelId),
-                model.ModelId
-            }))
-            .FirstOrDefault(model => model.SelectionId == selectionId)?.SelectionId
-            ?? Settings.Providers
-                .SelectMany(provider => provider.Models.Select(model => new
-                {
-                    SelectionId = AiModelConfig.BuildSelectionId(provider.Id, model.ModelId),
-                    model.ModelId
-                }))
-                .FirstOrDefault(model => model.ModelId == selectionId)?.SelectionId;
-    }
-
-    private void AddModel(AiProviderConfig provider)
-    {
-        string modelId = NewModelId.GetValueOrDefault(provider.Id, "").Trim();
-        if (string.IsNullOrWhiteSpace(modelId) || provider.Models.Any(model => model.ModelId == modelId))
-        {
-            return;
-        }
-        provider.Models.Add(new AiModelConfig
-        {
-            DisplayName = modelId,
-            ModelId = modelId,
-            ProviderId = provider.Id,
-            ProviderDisplayName = provider.DisplayName,
-            ProviderKind = provider.Kind
-        });
-        NewModelId[provider.Id] = "";
-    }
-
-    private void RequestRemoveModel(AiProviderConfig provider, AiModelConfig model)
-    {
-        ProviderOfModelToRemove = provider;
-        ModelToRemove = model;
-        RemoveModelMessage = $"{userConfig.GetText("U9044")}{model.ModelId}?";
-        RemoveModelMode = true;
-    }
-
-    private Task RemoveConfirmedModel()
-    {
-        if (ProviderOfModelToRemove != null && ModelToRemove != null)
-        {
-            ProviderOfModelToRemove.Models.Remove(ModelToRemove);
-        }
-        ProviderOfModelToRemove = null;
-        ModelToRemove = null;
-        return Task.CompletedTask;
     }
 
     private async Task Save()
@@ -341,74 +139,14 @@ else
         ShowResponseMessage("save", response, response.IsSuccessful ? userConfig.GetText("U0013") : null);
     }
 
-    private async Task TestProvider(AiProviderConfig provider)
+    private async Task TestProvider()
     {
-        var response = await MiddlewareClient.TestAiProvider(new AiConnectionTestParameters { Provider = provider });
-        ShowAiOperationResult("test_connection", response);
-    }
-
-    private async Task TestModel(AiProviderConfig provider, AiModelConfig model)
-    {
-        var response = await MiddlewareClient.TestAiModel(new AiModelTestParameters
+        if (Settings == null)
         {
-            Provider = provider,
-            Model = model,
-            SamplePrompt = "Reply with OK."
-        });
-        ShowAiOperationResult("test_connection", response);
-    }
-
-    private async Task RefreshOllamaModels()
-    {
-        var response = await MiddlewareClient.GetOllamaModels();
-        if (response.IsSuccessful && response.Data != null)
-        {
-            OllamaModels = response.Data;
-            NotifyCompletedOllamaDownloads();
+            return;
         }
-    }
-
-    private async Task DownloadOllamaModel()
-    {
-        await DownloadOllamaModel(NewOllamaModelId.Trim());
-    }
-
-    private async Task DownloadOllamaModel(string modelId)
-    {
-        AiOperationResult? result = await RunOllamaOperation("download", () => MiddlewareClient.DownloadOllamaModel(new AiOllamaModelParameters { ModelId = modelId }));
-        if (result?.Success == true && !string.IsNullOrWhiteSpace(modelId))
-        {
-            PendingOllamaDownloadHints.Add(modelId);
-            NotifyCompletedOllamaDownloads();
-        }
-    }
-
-    private async Task CancelDownloadOllamaModel(string modelId)
-    {
-        PendingOllamaDownloadHints.Remove(modelId);
-        await RunOllamaOperation("cancel", () => MiddlewareClient.CancelDownloadOllamaModel(new AiOllamaModelParameters { ModelId = modelId }));
-    }
-
-    private void RequestDeleteOllamaModel(string modelId)
-    {
-        ModelIdToDelete = modelId;
-        DeleteModelMessage = $"{userConfig.GetText("U9043")}{modelId}?";
-        DeleteModelMode = true;
-    }
-
-    private async Task DeleteConfirmedOllamaModel()
-    {
-        PendingOllamaDownloadHints.Remove(ModelIdToDelete);
-        await RunOllamaOperation("delete", () => MiddlewareClient.DeleteOllamaModel(new AiOllamaModelParameters { ModelId = ModelIdToDelete }));
-    }
-
-    private async Task<AiOperationResult?> RunOllamaOperation(string titleTextId, Func<Task<RestSharp.RestResponse<AiOperationResult>>> operation)
-    {
-        var response = await operation();
-        ShowAiOperationResult(titleTextId, response);
-        await RefreshOllamaModels();
-        StartOllamaRefreshLoopIfNeeded();
-        return response.Data;
+        var response = await MiddlewareClient.TestAiProvider(new AiConnectionTestParameters { Provider = Settings.Provider });
+        ShowAiOperationResult("test_connection", response);
     }
 
     private string LocalizeResult(AiOperationResult? result)
@@ -434,66 +172,5 @@ else
     {
         string message = successMessage ?? response.ErrorMessage ?? response.Content ?? userConfig.GetText("unspecified_error");
         DisplayMessageInUi(response.ErrorException, userConfig.GetText(titleTextId), message, !response.IsSuccessful);
-    }
-
-    private void NotifyCompletedOllamaDownloads()
-    {
-        foreach (string modelId in PendingOllamaDownloadHints.ToList())
-        {
-            if (OllamaModels.DownloadedModels.Any(model => string.Equals(model.ModelId, modelId, StringComparison.OrdinalIgnoreCase)))
-            {
-                DisplayMessageInUi(null, userConfig.GetText("download"), string.Format(userConfig.GetText("ai_model_downloaded_add_provider"), modelId), false);
-                PendingOllamaDownloadHints.Remove(modelId);
-            }
-        }
-    }
-
-    private static bool IsOllamaPullInProgress(AiOllamaModelState model)
-    {
-        return model.DownloadStatus == AiOllamaModelState.kStatusDownloading;
-    }
-
-    private void StartOllamaRefreshLoopIfNeeded()
-    {
-        if (OllamaRefreshCancellation != null || !OllamaModels.Downloads.Any(IsOllamaPullInProgress))
-        {
-            return;
-        }
-        CancellationTokenSource cancellation = new();
-        OllamaRefreshCancellation = cancellation;
-        _ = RefreshOllamaModelsUntilIdle(cancellation);
-    }
-
-    private async Task RefreshOllamaModelsUntilIdle(CancellationTokenSource cancellation)
-    {
-        try
-        {
-            using PeriodicTimer timer = new(TimeSpan.FromSeconds(2));
-            while (await timer.WaitForNextTickAsync(cancellation.Token))
-            {
-                await RefreshOllamaModels();
-                await InvokeAsync(StateHasChanged);
-                if (!OllamaModels.Downloads.Any(IsOllamaPullInProgress))
-                {
-                    break;
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            if (ReferenceEquals(OllamaRefreshCancellation, cancellation))
-            {
-                OllamaRefreshCancellation = null;
-            }
-            cancellation.Dispose();
-        }
-    }
-
-    public void Dispose()
-    {
-        OllamaRefreshCancellation?.Cancel();
     }
 }

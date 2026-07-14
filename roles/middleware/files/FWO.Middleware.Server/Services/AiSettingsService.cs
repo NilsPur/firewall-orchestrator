@@ -8,16 +8,14 @@ using FWO.Logging;
 namespace FWO.Middleware.Server.Services
 {
     /// <summary>
-    /// Handles global AI assistant settings stored in the global config, ai_provider, and ai_model
-    /// tables. Providers keep stable ids across saves so sessions can pin a specific provider.
+    /// Handles global AI assistant settings stored in global config plus the single provider/model row.
     /// </summary>
     public class AiSettingsService(ApiConnection apiConnection)
     {
         private readonly ApiConnection apiConnection = apiConnection;
 
         /// <summary>
-        /// Reads the global AI settings, assembling global config values with the relational
-        /// provider and model catalog. Returns defaults when the settings cannot be read.
+        /// Reads the global AI settings, returning defaults when the settings cannot be read.
         /// </summary>
         public async Task<AiSettings> GetSettings()
         {
@@ -25,9 +23,8 @@ namespace FWO.Middleware.Server.Services
             {
                 List<ConfigItem> configItems = await apiConnection.SendQueryAsync<List<ConfigItem>>(AiQueries.getAiConfig);
                 List<AiProviderConfig> providers = await apiConnection.SendQueryAsync<List<AiProviderConfig>>(AiQueries.getAiProviders);
-                AiSettings settings = new() { Providers = providers };
+                AiSettings settings = CreateSettings(providers);
                 ApplyConfigSettings(settings, configItems);
-                StampProviderKindOntoModels(settings);
                 return settings;
             }
             catch (Exception exception)
@@ -38,7 +35,7 @@ namespace FWO.Middleware.Server.Services
         }
 
         /// <summary>
-        /// Reads the assistant model selection settings available to every authenticated assistant user.
+        /// Reads the assistant model setting available to every authenticated assistant user.
         /// </summary>
         public async Task<AiAssistantSettings> GetAssistantSettings()
         {
@@ -46,45 +43,28 @@ namespace FWO.Middleware.Server.Services
         }
 
         /// <summary>
-        /// Filters global AI settings down to model selection data for the assistant page.
+        /// Filters global AI settings down to model display data for the assistant page.
         /// </summary>
         public static AiAssistantSettings CreateAssistantSettings(AiSettings settings)
         {
-            StampProviderKindOntoModels(settings);
-            List<AiModelConfig> enabledModels = settings.Providers
-                .Where(provider => provider.Enabled)
-                .SelectMany(provider => provider.Models)
-                .Where(model => model.Enabled)
-                .ToList();
-
-            string initialModelId = FindEnabledModelBySelection(settings, settings.InitialModelId)?.Model.SelectionId ?? "";
-
-            return new AiAssistantSettings
-            {
-                InitialModelId = initialModelId,
-                EnabledModels = enabledModels
-            };
+            NormalizeSingleSettings(settings);
+            return new AiAssistantSettings { Model = settings.Model };
         }
 
         /// <summary>
-        /// Saves the global AI settings. Prompt and model selection are upserted into global config,
-        /// removed providers are deleted, and the remaining providers are upserted by id so existing
-        /// provider ids are kept. Models are rewritten because nothing references a model by database id.
+        /// Saves the global AI settings. The provider and model are fixed to one row each.
         /// </summary>
         public async Task<AiSettings> SaveSettings(AiSettings settings)
         {
-            List<long> keepProviderIds = [.. settings.Providers.Where(provider => provider.Id > 0).Select(provider => provider.Id)];
-            List<object> providers = [.. settings.Providers.Select(BuildProviderInsert)];
-
+            NormalizeSingleSettings(settings);
             await apiConnection.SendQueryAsync<object>(AiQueries.saveAiSettings, new
             {
                 configItems = new List<ConfigItem>
                 {
-                    new() { Key = "system_prompt", Value = settings.SystemPrompt, User = 0 },
-                    new() { Key = "aiLastModelId", Value = settings.InitialModelId, User = 0 }
+                    new() { Key = "system_prompt", Value = settings.SystemPrompt, User = 0 }
                 },
-                keepProviderIds,
-                providers
+                provider = BuildProviderInsert(settings.Provider),
+                model = BuildModelInsert(settings.Model)
             });
             Log.WriteAudit("AI Settings", "Updated AI provider, model, or prompt settings.");
             return settings;
@@ -111,49 +91,43 @@ namespace FWO.Middleware.Server.Services
         }
 
         /// <summary>
-        /// Resolves a provider-aware model selection against enabled settings, falling back to the
-        /// configured initial model or the first enabled model when the request is unavailable.
+        /// Resolves the single enabled provider/model pair.
         /// </summary>
-        public static (AiProviderConfig Provider, AiModelConfig Model)? ResolveModelSelection(AiSettings settings, long providerId, string? modelId)
+        public static (AiProviderConfig Provider, AiModelConfig Model)? ResolveModel(AiSettings settings)
         {
-            StampProviderKindOntoModels(settings);
-            (AiProviderConfig Provider, AiModelConfig Model)? requestedSelection = FindEnabledModel(settings, providerId, modelId);
-            if (requestedSelection != null)
-            {
-                return requestedSelection;
-            }
-            (AiProviderConfig Provider, AiModelConfig Model)? initialSelection = FindEnabledModelBySelection(settings, settings.InitialModelId);
-            if (initialSelection != null)
-            {
-                return initialSelection;
-            }
-            foreach (AiProviderConfig provider in settings.Providers.Where(provider => provider.Enabled))
-            {
-                AiModelConfig? model = provider.Models.FirstOrDefault(model => model.Enabled);
-                if (model != null)
-                {
-                    return (provider, model);
-                }
-            }
-            return null;
+            NormalizeSingleSettings(settings);
+            return settings.Provider.Enabled && settings.Model.Enabled ? (settings.Provider, settings.Model) : null;
         }
 
-        private static void StampProviderKindOntoModels(AiSettings settings)
+        private static AiSettings CreateSettings(List<AiProviderConfig> providers)
         {
-            foreach (AiProviderConfig provider in settings.Providers)
-            {
-                foreach (AiModelConfig model in provider.Models)
-                {
-                    model.ProviderId = provider.Id;
-                    model.ProviderDisplayName = provider.DisplayName;
-                    model.ProviderKind = provider.Kind;
-                }
-            }
+            AiProviderConfig provider = providers.FirstOrDefault() ?? AiSettingsDefaults.CreateProvider();
+            AiModelConfig model = provider.Models.FirstOrDefault() ?? AiSettingsDefaults.CreateModel();
+            AiSettings settings = new() { Provider = provider, Model = model };
+            NormalizeSingleSettings(settings);
+            return settings;
         }
 
-        /// <summary>
-        /// Applies AI prompt and global model selection config rows to the settings DTO.
-        /// </summary>
+        private static void NormalizeSingleSettings(AiSettings settings)
+        {
+            settings.Provider.Id = AiSettingsDefaults.ProviderId;
+            settings.Provider.DisplayName = string.IsNullOrWhiteSpace(settings.Provider.DisplayName)
+                ? AiSettingsDefaults.ProviderDisplayName
+                : settings.Provider.DisplayName;
+            settings.Provider.ApiKeyEnvVariable = string.IsNullOrWhiteSpace(settings.Provider.ApiKeyEnvVariable)
+                ? AiSettingsDefaults.ApiKeyEnvVariable
+                : settings.Provider.ApiKeyEnvVariable;
+            settings.Provider.Enabled = true;
+
+            settings.Model.ProviderId = settings.Provider.Id;
+            settings.Model.ProviderDisplayName = settings.Provider.DisplayName;
+            settings.Model.ProviderKind = settings.Provider.Kind;
+            settings.Model.ModelId = string.IsNullOrWhiteSpace(settings.Model.ModelId) ? AiSettingsDefaults.ModelId : settings.Model.ModelId;
+            settings.Model.DisplayName = string.IsNullOrWhiteSpace(settings.Model.DisplayName) ? settings.Model.ModelId : settings.Model.DisplayName;
+            settings.Model.Enabled = true;
+            settings.Provider.Models = [settings.Model];
+        }
+
         private static void ApplyConfigSettings(AiSettings settings, List<ConfigItem> configItems)
         {
             ConfigItem? systemPrompt = configItems.FirstOrDefault(item => item.Key == "system_prompt");
@@ -161,33 +135,21 @@ namespace FWO.Middleware.Server.Services
             {
                 settings.SystemPrompt = systemPrompt.Value ?? "";
             }
-
-            ConfigItem? aiLastModelId = configItems.FirstOrDefault(item => item.Key == "aiLastModelId");
-            if (aiLastModelId != null)
-            {
-                settings.InitialModelId = aiLastModelId.Value ?? "";
-            }
         }
 
         private static object BuildProviderInsert(AiProviderConfig provider)
         {
-            Dictionary<string, object?> insert = new()
+            return new Dictionary<string, object?>
             {
+                ["id"] = provider.Id,
                 ["kind"] = provider.Kind.ToString(),
                 ["display_name"] = provider.DisplayName,
                 ["endpoint_url"] = provider.EndpointUrl,
                 ["api_key_env_variable"] = provider.ApiKeyEnvVariable,
                 ["timeout_seconds"] = provider.TimeoutSeconds,
                 ["max_retries"] = provider.MaxRetries,
-                ["enabled"] = provider.Enabled,
-                ["models"] = new { data = provider.Models.Select(BuildModelInsert).ToList() }
+                ["enabled"] = provider.Enabled
             };
-            // Only persisted providers carry an id; new providers get one from the database sequence.
-            if (provider.Id > 0)
-            {
-                insert["id"] = provider.Id;
-            }
-            return insert;
         }
 
         private static object BuildModelInsert(AiModelConfig model)
@@ -195,6 +157,7 @@ namespace FWO.Middleware.Server.Services
             return new
             {
                 model_id = model.ModelId,
+                provider_id = model.ProviderId,
                 display_name = model.DisplayName,
                 enabled = model.Enabled,
                 streaming_supported = model.StreamingSupported,
@@ -208,34 +171,6 @@ namespace FWO.Middleware.Server.Services
                 max_output_tokens = model.MaxOutputTokens,
                 reasoning_effort = (int?)model.ReasoningEffort
             };
-        }
-
-        private static (AiProviderConfig Provider, AiModelConfig Model)? FindEnabledModelBySelection(AiSettings settings, string? selectionId)
-        {
-            if (AiModelConfig.TryParseSelectionId(selectionId, out long providerId, out string modelId))
-            {
-                return FindEnabledModel(settings, providerId, modelId);
-            }
-            foreach (AiProviderConfig provider in settings.Providers.Where(provider => provider.Enabled))
-            {
-                AiModelConfig? model = provider.Models.FirstOrDefault(model => model.Enabled && model.ModelId == selectionId);
-                if (model != null)
-                {
-                    return (provider, model);
-                }
-            }
-            return null;
-        }
-
-        private static (AiProviderConfig Provider, AiModelConfig Model)? FindEnabledModel(AiSettings settings, long providerId, string? modelId)
-        {
-            if (providerId <= 0 || string.IsNullOrWhiteSpace(modelId))
-            {
-                return null;
-            }
-            AiProviderConfig? provider = settings.Providers.FirstOrDefault(currentProvider => currentProvider.Id == providerId && currentProvider.Enabled);
-            AiModelConfig? model = provider?.Models.FirstOrDefault(currentModel => currentModel.Enabled && currentModel.ModelId == modelId);
-            return provider != null && model != null ? (provider, model) : null;
         }
 
         private static async Task<AiOperationResult> TestEndpoint(AiProviderConfig provider)

@@ -231,29 +231,6 @@ namespace FWO.Test
         }
 
         [Test]
-        public void Constructor_DoesNotOverwriteUserAiLastModelWithGlobalValue()
-        {
-            SimulatedGlobalConfig globalConfig = new()
-            {
-                AiLastModelId = "global-model"
-            };
-            globalConfig.RawConfigItems =
-            [
-                new() { Key = "aiLastModelId", Value = "global-model", User = 0 }
-            ];
-
-            using UserConfigApiConnection apiConnection =
-                new([new() { Key = "aiLastModelId", Value = "user-model", User = 50 }]);
-            UserConfig userConfig = new(globalConfig, apiConnection, new UiUser { DbId = 50, Language = "English" });
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(globalConfig.AiLastModelId, Is.EqualTo("global-model"));
-                Assert.That(userConfig.AiLastModelId, Is.EqualTo("user-model"));
-            });
-        }
-
-        [Test]
         public async Task WriteToDatabase_UpdatesCurrentConfigAfterPersistingChanges()
         {
             SimulatedGlobalConfig globalConfig = new()

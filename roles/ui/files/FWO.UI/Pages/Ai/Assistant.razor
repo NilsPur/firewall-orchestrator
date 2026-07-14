@@ -13,7 +13,6 @@
 @inject MiddlewareClient MiddlewareClient
 @inject UserConfig userConfig
 @inject TokenService TokenService
-@inject ApiConnection apiConnection
 
 @implements IDisposable
 
@@ -54,13 +53,7 @@
             <div class="assistant-toolbar">
                 <div class="assistant-title-group">
                     <div class="assistant-eyebrow">@(userConfig.GetText("model"))</div>
-                    <select class="form-select form-select-sm assistant-model-select" @bind="SelectedModelSelectionId" @bind:after="PersistSelectedModel" disabled="@(IsActive || CurrentSession != null)">
-                        <option value="">@(userConfig.GetText("choose_model"))</option>
-                        @foreach (AiModelConfig model in EnabledModels)
-                        {
-                            <option value="@model.SelectionId">@model.ProviderDisplayName - @model.DisplayName (@model.ModelId)</option>
-                        }
-                    </select>
+                    <div class="assistant-model-name">@Settings.Model.ProviderDisplayName - @Settings.Model.DisplayName (@Settings.Model.ModelId)</div>
                 </div>
                 @if (CurrentSession != null)
                 {
@@ -164,7 +157,6 @@
     private AiSession? CurrentSession { get; set; }
     private List<AiChatMessage> Messages { get; set; } = [];
     private AiAssistantSettings Settings { get; set; } = new();
-    private string SelectedModelSelectionId { get; set; } = "";
     private string SessionName { get; set; } = "";
     private string Prompt { get; set; } = "";
     private string LastPrompt { get; set; } = "";
@@ -176,57 +168,9 @@
     private CancellationTokenSource? RunCancellation { get; set; }
     private bool IsDisposed { get; set; }
 
-    private List<AiModelConfig> EnabledModels => Settings.EnabledModels;
-
     private bool IsCurrentSession(AiSession session)
     {
         return CurrentSession?.Id == session.Id;
-    }
-
-    /// <summary>
-    /// Picks the model dropdown's initial value: the user's remembered model when it is still
-    /// enabled, otherwise the global initial model, otherwise the first enabled model.
-    /// </summary>
-    private string PickInitialModel()
-    {
-        string? userSelection = FindEnabledSelectionId(userConfig.AiLastModelId);
-        if (!string.IsNullOrWhiteSpace(userSelection))
-        {
-            return userSelection;
-        }
-        string? initialSelection = FindEnabledSelectionId(Settings.InitialModelId);
-        if (!string.IsNullOrWhiteSpace(initialSelection))
-        {
-            return initialSelection;
-        }
-        return EnabledModels.FirstOrDefault()?.SelectionId ?? "";
-    }
-
-    private string? FindEnabledSelectionId(string? selectionId)
-    {
-        return EnabledModels.FirstOrDefault(model => model.SelectionId == selectionId)?.SelectionId
-            ?? EnabledModels.FirstOrDefault(model => model.ModelId == selectionId)?.SelectionId;
-    }
-
-    /// <summary>
-    /// Persists the user's model selection as a per-user setting so it is restored on the next visit.
-    /// </summary>
-    private async Task PersistSelectedModel()
-    {
-        if (string.IsNullOrWhiteSpace(SelectedModelSelectionId) || SelectedModelSelectionId == userConfig.AiLastModelId)
-        {
-            return;
-        }
-        try
-        {
-            ConfigData editedConfig = (ConfigData)userConfig.Clone();
-            editedConfig.AiLastModelId = SelectedModelSelectionId;
-            await userConfig.WriteToDatabase(editedConfig, apiConnection);
-        }
-        catch (Exception exception)
-        {
-            ShowAssistantError(exception.Message, exception);
-        }
     }
 
     /// <summary>
@@ -251,7 +195,6 @@
             if (response.IsSuccessful && response.Data != null)
             {
                 Settings = response.Data;
-                SelectedModelSelectionId = PickInitialModel();
             }
             else
             {
@@ -315,12 +258,7 @@
     {
         try
         {
-            AiModelConfig? selectedModel = EnabledModels.FirstOrDefault(model => model.SelectionId == SelectedModelSelectionId);
-            RestSharp.RestResponse<AiSession> response = await MiddlewareClient.CreateAiSession(new AiCreateSessionParameters
-            {
-                ProviderId = selectedModel?.ProviderId ?? 0,
-                ModelId = selectedModel?.ModelId
-            });
+            RestSharp.RestResponse<AiSession> response = await MiddlewareClient.CreateAiSession(new AiCreateSessionParameters());
             if (response.IsSuccessful && response.Data != null)
             {
                 CurrentSession = response.Data;
@@ -348,9 +286,6 @@
             if (response.IsSuccessful && response.Data != null)
             {
                 CurrentSession = response.Data;
-                SelectedModelSelectionId = FindEnabledSelectionId(AiModelConfig.BuildSelectionId(CurrentSession.ProviderId, CurrentSession.ModelId))
-                    ?? FindEnabledSelectionId(CurrentSession.ModelId)
-                    ?? SelectedModelSelectionId;
                 SessionName = CurrentSession.Name;
                 RunError = "";
                 await LoadMessages();

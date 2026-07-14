@@ -14,10 +14,10 @@ namespace FWO.Test
         {
             AiProviderConfig provider = BuildProvider();
             AiModelConfig model = BuildModel();
-            string originalKey = InvokeCacheKey(provider, model);
+            string originalKey = InvokeCacheKey(provider, model, "prompt");
 
             provider.ApiKeyEnvVariable = "FWO_AI_SECOND_KEY";
-            string changedKey = InvokeCacheKey(provider, model);
+            string changedKey = InvokeCacheKey(provider, model, "prompt");
 
             Assert.That(changedKey, Is.Not.EqualTo(originalKey));
         }
@@ -27,10 +27,22 @@ namespace FWO.Test
         {
             AiProviderConfig provider = BuildProvider();
             AiModelConfig model = BuildModel();
-            string originalKey = InvokeCacheKey(provider, model);
+            string originalKey = InvokeCacheKey(provider, model, "prompt");
 
             model.ToolCallsSupported = false;
-            string changedKey = InvokeCacheKey(provider, model);
+            string changedKey = InvokeCacheKey(provider, model, "prompt");
+
+            Assert.That(changedKey, Is.Not.EqualTo(originalKey));
+        }
+
+        [Test]
+        public void CacheKey_ChangesWithSystemPrompt()
+        {
+            AiProviderConfig provider = BuildProvider();
+            AiModelConfig model = BuildModel();
+            string originalKey = InvokeCacheKey(provider, model, "first prompt");
+
+            string changedKey = InvokeCacheKey(provider, model, "second prompt");
 
             Assert.That(changedKey, Is.Not.EqualTo(originalKey));
         }
@@ -66,6 +78,18 @@ namespace FWO.Test
             });
         }
 
+        [Test]
+        public void BuildAgent_DoesNotResolveOpenAiApiKey()
+        {
+            AiProviderConfig provider = BuildProvider();
+            provider.ApiKeyEnvVariable = $"FWO_AI_TEST_KEY_{Guid.NewGuid():N}";
+            Environment.SetEnvironmentVariable(provider.ApiKeyEnvVariable, null);
+            AiModelConfig model = BuildModel();
+            AgentFactoryService factory = new(null!, null!);
+
+            Assert.DoesNotThrow(() => factory.BuildAgent(provider, model, null));
+        }
+
         private sealed class DummyTool : AITool { }
 
         private static AiProviderConfig BuildProvider()
@@ -73,7 +97,7 @@ namespace FWO.Test
             return new AiProviderConfig
             {
                 Id = 1,
-                Kind = AiProviderKind.OpenAiCompatible,
+                Kind = AiProviderKind.OpenAi,
                 EndpointUrl = "https://example.invalid/v1",
                 ApiKeyEnvVariable = "FWO_AI_FIRST_KEY",
                 TimeoutSeconds = 60,
@@ -94,11 +118,11 @@ namespace FWO.Test
             };
         }
 
-        private static string InvokeCacheKey(AiProviderConfig provider, AiModelConfig model)
+        private static string InvokeCacheKey(AiProviderConfig provider, AiModelConfig model, string systemPrompt)
         {
             MethodInfo method = typeof(AgentFactoryService).GetMethod("CacheKey", BindingFlags.NonPublic | BindingFlags.Static)
                 ?? throw new MissingMethodException(nameof(AgentFactoryService), "CacheKey");
-            return (string)method.Invoke(null, [provider, model])!;
+            return (string)method.Invoke(null, [provider, model, systemPrompt])!;
         }
     }
 }

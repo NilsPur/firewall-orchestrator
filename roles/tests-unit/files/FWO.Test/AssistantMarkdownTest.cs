@@ -81,16 +81,6 @@ namespace FWO.Test
             Assert.That(Icons.TestConnection, Does.Contain("plug"));
         }
 
-        [Test]
-        public void AssistantSettings_OllamaDownloadHintTextIsAvailable()
-        {
-            SimulatedUserConfig userConfig = new();
-
-            string message = string.Format(userConfig.GetText("ai_model_downloaded_add_provider"), "llama3.2");
-
-            Assert.That(message, Does.Contain("model provider"));
-        }
-
         private static string RenderAssistantMarkdown(string markdown)
         {
             return AssistantMarkdownRenderer.Render(markdown).ToString();

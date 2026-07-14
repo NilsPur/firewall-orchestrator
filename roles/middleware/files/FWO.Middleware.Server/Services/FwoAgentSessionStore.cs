@@ -2,7 +2,6 @@ using FWO.Basics;
 using FWO.Data.Ai;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
-using Newtonsoft.Json.Linq;
 using System.Text.Json;
 
 namespace FWO.Middleware.Server.Services
@@ -28,15 +27,12 @@ namespace FWO.Middleware.Server.Services
             if (TryGetState(session.State, out string stateJson))
             {
                 using JsonDocument document = JsonDocument.Parse(stateJson);
-                JsonElement normalizedState = AgentSessionJson.PrepareForDeserialize(document.RootElement);
-                agentSession = await agent.DeserializeSessionAsync(normalizedState, AgentSessionJson.Options, cancellationToken);
+                agentSession = await agent.DeserializeSessionAsync(document.RootElement, AgentSessionJson.Options, cancellationToken);
             }
             else
             {
                 agentSession = await agent.CreateSessionAsync(cancellationToken);
             }
-            FwoRoutingAgent.StampModel(agentSession, session.ProviderId, session.ModelId);
-            FwoRoutingAgent.StampSystemPrompt(agentSession, session.SystemPrompt);
             return agentSession;
         }
 
@@ -46,7 +42,7 @@ namespace FWO.Middleware.Server.Services
             (long sessionId, int userId) = ResolveAccess(conversationId);
             JsonElement state = await agent.SerializeSessionAsync(session, AgentSessionJson.Options, cancellationToken);
             JsonElement persistedState = AgentSessionJson.PrepareForPersist(state);
-            await sessionService.SaveState(sessionId, userId, JToken.Parse(persistedState.GetRawText()));
+            await sessionService.SaveState(sessionId, userId, persistedState.GetRawText());
         }
 
         private (long SessionId, int UserId) ResolveAccess(string conversationId)
@@ -73,15 +69,10 @@ namespace FWO.Middleware.Server.Services
             return JwtClaimParser.ExtractIntClaimValues(user.Claims, "x-hasura-user-id").FirstOrDefault();
         }
 
-        private static bool TryGetState(JToken state, out string stateJson)
+        private static bool TryGetState(string state, out string stateJson)
         {
-            stateJson = "";
-            if (state == null || state.Type == JTokenType.Null || (state is JObject jObject && !jObject.HasValues))
-            {
-                return false;
-            }
-            stateJson = state.ToString(Newtonsoft.Json.Formatting.None);
-            return true;
+            stateJson = state?.Trim() ?? "";
+            return !string.IsNullOrWhiteSpace(stateJson);
         }
     }
 }

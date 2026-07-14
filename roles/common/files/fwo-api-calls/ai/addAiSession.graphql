@@ -1,10 +1,9 @@
-mutation addAiSession($userId: Int!, $name: String!, $systemPrompt: String!, $modelId: String!, $providerId: bigint!) {
+mutation addAiSession($userId: Int!, $name: String!, $systemPrompt: String!, $modelId: String!) {
   insert_ai_session(objects: {
     user_id: $userId,
     name: $name,
     system_prompt: $systemPrompt,
-    model_id: $modelId,
-    provider_id: $providerId
+    model_id: $modelId
   }) {
     returning {
       newIdLong: id

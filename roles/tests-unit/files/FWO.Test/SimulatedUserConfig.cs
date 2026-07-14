@@ -491,8 +491,7 @@ namespace FWO.Test
             {"U9026","Nothing to request!"},
             {"CreateFlow","Create flow"},
             {"flow_creation_succeeded","Flow DB entries were created."},
-            {"flow_creation_failed","Flow DB entries could not be created. Check the workflow log for unresolved objects or services."},
-            {"ai_model_downloaded_add_provider","{0} has been downloaded. Add it to the model provider before using it."}
+            {"flow_creation_failed","Flow DB entries could not be created. Check the workflow log for unresolved objects or services."}
         };
 
         public override string GetText(string key)

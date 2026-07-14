@@ -8,20 +8,17 @@ namespace FWO.Data.Ai
         [JsonProperty("system_prompt"), JsonPropertyName("system_prompt")]
         public string SystemPrompt { get; set; } = AiSettingsDefaults.SystemPrompt;
 
-        [JsonProperty("initial_model_id"), JsonPropertyName("initial_model_id")]
-        public string InitialModelId { get; set; } = "";
+        [JsonProperty("provider"), JsonPropertyName("provider")]
+        public AiProviderConfig Provider { get; set; } = AiSettingsDefaults.CreateProvider();
 
-        [JsonProperty("providers"), JsonPropertyName("providers")]
-        public List<AiProviderConfig> Providers { get; set; } = [];
+        [JsonProperty("model"), JsonPropertyName("model")]
+        public AiModelConfig Model { get; set; } = AiSettingsDefaults.CreateModel();
     }
 
     public class AiAssistantSettings
     {
-        [JsonProperty("initial_model_id"), JsonPropertyName("initial_model_id")]
-        public string InitialModelId { get; set; } = "";
-
-        [JsonProperty("enabled_models"), JsonPropertyName("enabled_models")]
-        public List<AiModelConfig> EnabledModels { get; set; } = [];
+        [JsonProperty("model"), JsonPropertyName("model")]
+        public AiModelConfig Model { get; set; } = AiSettingsDefaults.CreateModel();
     }
 
     public class AiProviderConfig
@@ -38,7 +35,7 @@ namespace FWO.Data.Ai
         public string DisplayName { get; set; } = "";
 
         [JsonProperty("kind"), JsonPropertyName("kind")]
-        public AiProviderKind Kind { get; set; } = AiProviderKind.OpenAiCompatible;
+        public AiProviderKind Kind { get; set; } = AiProviderKind.OpenAi;
 
         [JsonProperty("endpoint_url"), JsonPropertyName("endpoint_url")]
         public string EndpointUrl { get; set; } = "";
@@ -70,8 +67,6 @@ namespace FWO.Data.Ai
 
     public class AiModelConfig
     {
-        private const char kSelectionSeparator = '|';
-
         [JsonProperty("display_name"), JsonPropertyName("display_name")]
         public string DisplayName { get; set; } = "";
 
@@ -85,10 +80,7 @@ namespace FWO.Data.Ai
         public string ProviderDisplayName { get; set; } = "";
 
         [JsonProperty("provider_kind"), JsonPropertyName("provider_kind")]
-        public AiProviderKind ProviderKind { get; set; } = AiProviderKind.OpenAiCompatible;
-
-        [JsonProperty("selection_id"), JsonPropertyName("selection_id")]
-        public string SelectionId => BuildSelectionId(ProviderId, ModelId);
+        public AiProviderKind ProviderKind { get; set; } = AiProviderKind.OpenAi;
 
         [JsonProperty("streaming_supported"), JsonPropertyName("streaming_supported")]
         public bool? StreamingSupported { get; set; }
@@ -122,62 +114,5 @@ namespace FWO.Data.Ai
 
         [JsonProperty("enabled"), JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = false;
-
-        /// <summary>
-        /// Builds a UI-safe model selection id that preserves provider identity.
-        /// </summary>
-        public static string BuildSelectionId(long providerId, string modelId)
-        {
-            return $"{providerId}{kSelectionSeparator}{modelId}";
-        }
-
-        /// <summary>
-        /// Parses a provider-aware model selection id.
-        /// </summary>
-        public static bool TryParseSelectionId(string? selectionId, out long providerId, out string modelId)
-        {
-            providerId = 0;
-            modelId = "";
-            if (string.IsNullOrWhiteSpace(selectionId))
-            {
-                return false;
-            }
-            int separatorIndex = selectionId.IndexOf(kSelectionSeparator);
-            if (separatorIndex <= 0 || separatorIndex >= selectionId.Length - 1)
-            {
-                return false;
-            }
-            if (!long.TryParse(selectionId[..separatorIndex], out providerId))
-            {
-                return false;
-            }
-            modelId = selectionId[(separatorIndex + 1)..];
-            return true;
-        }
-    }
-
-    public class AiOllamaModelState
-    {
-        public const string kStatusDownloaded = "downloaded";
-        public const string kStatusDownloading = "downloading";
-        public const string kStatusFailed = "failed";
-
-        [JsonProperty("model_id"), JsonPropertyName("model_id")]
-        public required string ModelId { get; set; }
-
-        [JsonProperty("status"), JsonPropertyName("status")]
-        public required string DownloadStatus { get; set; }
-
-        [JsonProperty("progress"), JsonPropertyName("progress")]
-        public required int DownloadProgress { get; set; }
-    }
-
-    public class AiOllamaModelsResponse
-    {
-        [JsonProperty("downloads"), JsonPropertyName("downloads")]
-        public List<AiOllamaModelState> Downloads { get; set; } = [];
-
-        [JsonProperty("downloaded_models"), JsonPropertyName("downloaded_models")]
-        public List<AiOllamaModelState> DownloadedModels { get; set; } = [];
     }
 }

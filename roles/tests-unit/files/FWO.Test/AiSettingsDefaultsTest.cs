@@ -11,250 +11,105 @@ namespace FWO.Test
     public class AiSettingsDefaultsTest
     {
         [Test]
-        public void Defaults_HaveNoProvidersAndDefaultPrompt()
+        public void Defaults_UseSingleOpenAiProviderAndModel()
         {
             AiSettings settings = new();
 
             Assert.Multiple(() =>
             {
-                Assert.That(settings.Providers, Is.Empty);
                 Assert.That(settings.SystemPrompt, Is.EqualTo(AiSettingsDefaults.SystemPrompt));
-                Assert.That(settings.SystemPrompt, Does.Contain("tools instead of assumptions"));
-                Assert.That(settings.SystemPrompt, Does.Contain("tool data is missing or insufficient"));
-                Assert.That(settings.InitialModelId, Is.Empty);
+                Assert.That(settings.Provider.Id, Is.EqualTo(1));
+                Assert.That(settings.Provider.Kind, Is.EqualTo(AiProviderKind.OpenAi));
+                Assert.That(settings.Provider.ApiKeyEnvVariable, Is.EqualTo("OPENAI_API_KEY"));
+                Assert.That(settings.Model.ModelId, Is.EqualTo(AiSettingsDefaults.ModelId));
+                Assert.That(settings.Model.ToolCallsSupported, Is.True);
+                Assert.That(settings.Model.ReasoningSupported, Is.True);
             });
         }
 
         [Test]
-        public void GenerationParameters_AreNullByDefault()
+        public void ProviderKind_SupportsAllExistingKinds()
         {
-            AiModelConfig model = new();
+            Assert.That(Enum.GetValues<AiProviderKind>(), Is.EquivalentTo(new[]
+            {
+                AiProviderKind.Ollama,
+                AiProviderKind.OpenAi,
+                AiProviderKind.Anthropic,
+                AiProviderKind.Google,
+                AiProviderKind.OpenAiCompatible
+            }));
+        }
+
+        [Test]
+        public void ResolveModel_ReturnsSingleEnabledModel()
+        {
+            (AiProviderConfig Provider, AiModelConfig Model)? selection = AiSettingsService.ResolveModel(new AiSettings());
 
             Assert.Multiple(() =>
             {
-                Assert.That(model.Temperature, Is.Null);
-                Assert.That(model.TopP, Is.Null);
-                Assert.That(model.TopK, Is.Null);
-                Assert.That(model.MaxOutputTokens, Is.Null);
-                Assert.That(model.ReasoningEffort, Is.Null);
-                Assert.That(model.StreamingSupported, Is.Null);
-                Assert.That(model.ToolCallsSupported, Is.Null);
+                Assert.That(selection?.Provider.Kind, Is.EqualTo(AiProviderKind.OpenAi));
+                Assert.That(selection?.Model.ModelId, Is.EqualTo(AiSettingsDefaults.ModelId));
             });
         }
 
         [Test]
-        public void Model_SerializesSupportedFlags()
+        public void AssistantSettings_ReturnsSingleModel()
         {
-            AiModelConfig model = new() { ModelId = "m", StreamingSupported = true, ToolCallsSupported = false, VisionSupported = true, ReasoningSupported = false };
+            AiAssistantSettings assistantSettings = AiSettingsService.CreateAssistantSettings(new AiSettings());
 
-            string serialized = JsonConvert.SerializeObject(model);
+            Assert.That(assistantSettings.Model.ModelId, Is.EqualTo(AiSettingsDefaults.ModelId));
+        }
+
+        [Test]
+        public async Task SaveSettings_UpsertsSingleProviderAndModel()
+        {
+            CapturingApiConnection apiConnection = new();
+            AiSettingsService settingsService = new(apiConnection);
+            AiSettings settings = new() { SystemPrompt = "prompt" };
+
+            await settingsService.SaveSettings(settings);
+
+            List<FWO.Config.Api.Data.ConfigItem> configItems = GetVariable<List<FWO.Config.Api.Data.ConfigItem>>(apiConnection.LastVariables!, "configItems");
+            Dictionary<string, object?> provider = GetVariable<Dictionary<string, object?>>(apiConnection.LastVariables!, "provider");
+            object model = GetVariable<object>(apiConnection.LastVariables!, "model");
 
             Assert.Multiple(() =>
             {
-                Assert.That(serialized, Does.Contain("\"streaming_supported\":true"));
-                Assert.That(serialized, Does.Contain("\"tool_calls_supported\":false"));
-                Assert.That(serialized, Does.Not.Contain("capabilities"));
+                Assert.That(apiConnection.LastQuery, Is.EqualTo(AiQueries.saveAiSettings));
+                Assert.That(configItems.Single().Key, Is.EqualTo("system_prompt"));
+                Assert.That(configItems.Single().Value, Is.EqualTo("prompt"));
+                Assert.That(provider["id"], Is.EqualTo(1L));
+                Assert.That(provider["kind"], Is.EqualTo("OpenAi"));
+                Assert.That(GetProperty<string>(model, "model_id"), Is.EqualTo(AiSettingsDefaults.ModelId));
+                Assert.That(GetProperty<long>(model, "provider_id"), Is.EqualTo(1L));
+                Assert.That(GetProperty<bool?>(model, "tool_calls_supported"), Is.True);
             });
         }
 
         [Test]
-        public void ResolveModelSelection_UsesRequestedProviderAndModel()
-        {
-            AiSettings settings = new()
-            {
-                Providers =
-                [
-                    new AiProviderConfig { Id = 1, Enabled = true, Models = [new AiModelConfig { ModelId = "shared", Enabled = true }] },
-                    new AiProviderConfig { Id = 2, Enabled = true, Models = [new AiModelConfig { ModelId = "shared", Enabled = true }] }
-                ]
-            };
-
-            (AiProviderConfig Provider, AiModelConfig Model)? selection = AiSettingsService.ResolveModelSelection(settings, 2, "shared");
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(selection?.Provider.Id, Is.EqualTo(2));
-                Assert.That(selection?.Model.ModelId, Is.EqualTo("shared"));
-            });
-        }
-
-        [Test]
-        public void ResolveModelSelection_FallsBackToInitialSelection()
-        {
-            AiSettings settings = new()
-            {
-                InitialModelId = AiModelConfig.BuildSelectionId(1, "init"),
-                Providers =
-                [
-                    new AiProviderConfig { Id = 1, Enabled = true, Models = [new AiModelConfig { ModelId = "init", Enabled = true }] }
-                ]
-            };
-
-            (AiProviderConfig Provider, AiModelConfig Model)? selection = AiSettingsService.ResolveModelSelection(settings, 2, "missing");
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(selection?.Provider.Id, Is.EqualTo(1));
-                Assert.That(selection?.Model.ModelId, Is.EqualTo("init"));
-            });
-        }
-
-        [Test]
-        public void ResolveModelSelection_ReturnsNullWhenNoModelIsEnabled()
-        {
-            Assert.That(AiSettingsService.ResolveModelSelection(new AiSettings(), 1, "missing"), Is.Null);
-        }
-
-        [Test]
-        public void AssistantSettings_ContainsOnlyEnabledModels()
-        {
-            AiSettings settings = new()
-            {
-                InitialModelId = "disabled-model",
-                Providers =
-                [
-                    new AiProviderConfig
-                    {
-                        Id = 1,
-                        Enabled = true,
-                        Models =
-                        [
-                            new AiModelConfig { ModelId = "enabled-model", DisplayName = "Enabled", Enabled = true },
-                            new AiModelConfig { ModelId = "disabled-model", DisplayName = "Disabled", Enabled = false }
-                        ]
-                    },
-                    new AiProviderConfig
-                    {
-                        Id = 2,
-                        Enabled = false,
-                        Models =
-                        [
-                            new AiModelConfig { ModelId = "hidden-model", DisplayName = "Hidden", Enabled = true }
-                        ]
-                    }
-                ]
-            };
-
-            AiAssistantSettings assistantSettings = AiSettingsService.CreateAssistantSettings(settings);
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(assistantSettings.InitialModelId, Is.Empty);
-                Assert.That(assistantSettings.EnabledModels.Select(model => model.ModelId), Is.EqualTo(new[] { "enabled-model" }));
-                Assert.That(assistantSettings.EnabledModels.Single().ProviderId, Is.EqualTo(1));
-            });
-        }
-
-        [Test]
-        public void AssistantSettings_KeepsValidInitialModel()
-        {
-            AiSettings settings = new()
-            {
-                InitialModelId = AiModelConfig.BuildSelectionId(7, "enabled-model"),
-                Providers =
-                [
-                    new AiProviderConfig
-                    {
-                        Id = 7,
-                        Enabled = true,
-                        Models = [new AiModelConfig { ModelId = "enabled-model", DisplayName = "Enabled", Enabled = true }]
-                    }
-                ]
-            };
-
-            AiAssistantSettings assistantSettings = AiSettingsService.CreateAssistantSettings(settings);
-
-            Assert.That(assistantSettings.InitialModelId, Is.EqualTo(AiModelConfig.BuildSelectionId(7, "enabled-model")));
-        }
-
-        [Test]
-        public void AssistantSettings_AcceptsLegacyInitialModelId()
-        {
-            AiSettings settings = new()
-            {
-                InitialModelId = "enabled-model",
-                Providers =
-                [
-                    new AiProviderConfig
-                    {
-                        Id = 7,
-                        Enabled = true,
-                        Models = [new AiModelConfig { ModelId = "enabled-model", DisplayName = "Enabled", Enabled = true }]
-                    }
-                ]
-            };
-
-            AiAssistantSettings assistantSettings = AiSettingsService.CreateAssistantSettings(settings);
-
-            Assert.That(assistantSettings.InitialModelId, Is.EqualTo(AiModelConfig.BuildSelectionId(7, "enabled-model")));
-        }
-
-        [Test]
-        public async Task SaveSettings_UpsertsKeptProvidersAndOmitsIdForNewOnes()
+        public async Task SaveSettings_PreservesAdminSelectedProviderKind()
         {
             CapturingApiConnection apiConnection = new();
             AiSettingsService settingsService = new(apiConnection);
             AiSettings settings = new()
             {
-                SystemPrompt = "prompt",
-                InitialModelId = "llama",
-                Providers =
-                [
-                    new AiProviderConfig { Id = 7, Kind = AiProviderKind.Ollama, Enabled = true, Models = [new AiModelConfig { ModelId = "llama", Enabled = true, StreamingSupported = true }] },
-                    new AiProviderConfig { Id = 0, Kind = AiProviderKind.OpenAi }
-                ]
+                Provider = new AiProviderConfig { Kind = AiProviderKind.Ollama, EndpointUrl = "http://127.0.0.1:11434" },
+                Model = new AiModelConfig { ModelId = "qwen3.5:4b" }
             };
 
-            await settingsService.SaveSettings(settings);
+            AiSettings saved = await settingsService.SaveSettings(settings);
 
-            List<long> keepProviderIds = GetVariable<List<long>>(apiConnection.LastVariables!, "keepProviderIds");
-            List<FWO.Config.Api.Data.ConfigItem> configItems = GetVariable<List<FWO.Config.Api.Data.ConfigItem>>(apiConnection.LastVariables!, "configItems");
-            List<object> providers = [.. GetVariable<System.Collections.IEnumerable>(apiConnection.LastVariables!, "providers").Cast<object>()];
-            Dictionary<string, object?> keptProvider = (Dictionary<string, object?>)providers[0];
-            Dictionary<string, object?> newProvider = (Dictionary<string, object?>)providers[1];
-            List<object> models = [.. GetProperty<System.Collections.IEnumerable>(keptProvider["models"]!, "data").Cast<object>()];
-            object keptModel = models.Single();
+            Dictionary<string, object?> provider = GetVariable<Dictionary<string, object?>>(apiConnection.LastVariables!, "provider");
 
             Assert.Multiple(() =>
             {
-                Assert.That(apiConnection.LastQuery, Is.EqualTo(AiQueries.saveAiSettings));
-                Assert.That(keepProviderIds, Is.EqualTo(new long[] { 7 }));
-                Assert.That(configItems.Single(item => item.Key == "system_prompt").Value, Is.EqualTo("prompt"));
-                Assert.That(configItems.Single(item => item.Key == "aiLastModelId").Value, Is.EqualTo("llama"));
-                Assert.That(configItems.All(item => item.User == 0), Is.True);
-                Assert.That(keptProvider.ContainsKey("id"), Is.True);
-                Assert.That(keptProvider["id"], Is.EqualTo(7L));
-                Assert.That(newProvider.ContainsKey("id"), Is.False);
-                Assert.That(GetProperty<bool?>(keptModel, "streaming_supported"), Is.True);
+                Assert.That(saved.Provider.Kind, Is.EqualTo(AiProviderKind.Ollama));
+                Assert.That(provider["kind"], Is.EqualTo("Ollama"));
             });
         }
 
         [Test]
-        public async Task GetSettings_ReadsPromptAndLastModelFromGlobalConfig()
-        {
-            CapturingApiConnection apiConnection = new()
-            {
-                ConfigResponseJson = """
-                [
-                  { "config_key": "system_prompt", "config_value": "stored prompt" },
-                  { "config_key": "aiLastModelId", "config_value": "stored-model" }
-                ]
-                """,
-                ProviderResponseJson = "[]"
-            };
-            AiSettingsService settingsService = new(apiConnection);
-
-            AiSettings settings = await settingsService.GetSettings();
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(settings.SystemPrompt, Is.EqualTo("stored prompt"));
-                Assert.That(settings.InitialModelId, Is.EqualTo("stored-model"));
-            });
-        }
-
-        [Test]
-        public async Task GetSettings_ReadsSeededProviders()
+        public async Task GetSettings_PreservesNonDefaultSeededProviderKind()
         {
             CapturingApiConnection apiConnection = new()
             {
@@ -269,8 +124,40 @@ namespace FWO.Test
                     "enabled": true,
                     "models": [
                       {
-                        "model_id": "qwen3:5.2b",
-                        "display_name": "qwen3:5.2b",
+                        "model_id": "qwen3.5:4b",
+                        "display_name": "qwen3.5:4b",
+                        "enabled": true
+                      }
+                    ]
+                  }
+                ]
+                """
+            };
+            AiSettingsService settingsService = new(apiConnection);
+
+            AiSettings settings = await settingsService.GetSettings();
+
+            Assert.That(settings.Provider.Kind, Is.EqualTo(AiProviderKind.Ollama));
+        }
+
+        [Test]
+        public async Task GetSettings_ReadsSeededProviderAndModel()
+        {
+            CapturingApiConnection apiConnection = new()
+            {
+                ConfigResponseJson = """[{ "config_key": "system_prompt", "config_value": "stored prompt" }]""",
+                ProviderResponseJson = """
+                [
+                  {
+                    "id": 1,
+                    "kind": "OpenAi",
+                    "display_name": "OpenAI",
+                    "api_key_env_variable": "OPENAI_API_KEY",
+                    "enabled": true,
+                    "models": [
+                      {
+                        "model_id": "gpt-5.4-mini",
+                        "display_name": "GPT-5.4 mini",
                         "enabled": true,
                         "tool_calls_supported": true
                       }
@@ -285,13 +172,11 @@ namespace FWO.Test
 
             Assert.Multiple(() =>
             {
-                Assert.That(apiConnection.Queries, Does.Contain(AiQueries.getAiConfig));
-                Assert.That(apiConnection.Queries, Does.Contain(AiQueries.getAiProviders));
-                Assert.That(settings.Providers, Has.Count.EqualTo(1));
-                Assert.That(settings.Providers[0].Kind, Is.EqualTo(AiProviderKind.Ollama));
-                Assert.That(settings.Providers[0].Models[0].ProviderId, Is.EqualTo(1));
-                Assert.That(settings.Providers[0].Models[0].ProviderDisplayName, Is.EqualTo("Ollama"));
-                Assert.That(settings.Providers[0].Models[0].ToolCallsSupported, Is.True);
+                Assert.That(settings.SystemPrompt, Is.EqualTo("stored prompt"));
+                Assert.That(settings.Provider.Kind, Is.EqualTo(AiProviderKind.OpenAi));
+                Assert.That(settings.Model.ProviderId, Is.EqualTo(1));
+                Assert.That(settings.Model.ProviderDisplayName, Is.EqualTo("OpenAI"));
+                Assert.That(settings.Model.ToolCallsSupported, Is.True);
             });
         }
 
@@ -313,14 +198,12 @@ namespace FWO.Test
         {
             public string LastQuery { get; private set; } = "";
             public object? LastVariables { get; private set; }
-            public List<string> Queries { get; } = [];
             public string ConfigResponseJson { get; set; } = "";
             public string ProviderResponseJson { get; set; } = "";
 
             public override Task<QueryResponseType> SendQueryAsync<QueryResponseType>(string query, object? variables = null, string? operationName = null, QueryChunkingOptions? chunkingOptions = null)
             {
                 LastQuery = query;
-                Queries.Add(query);
                 LastVariables = variables;
                 if (query == AiQueries.getAiConfig && !string.IsNullOrWhiteSpace(ConfigResponseJson))
                 {

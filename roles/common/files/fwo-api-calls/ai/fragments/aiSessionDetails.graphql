@@ -5,6 +5,5 @@ fragment aiSessionDetails on ai_session {
   created
   system_prompt
   model_id
-  provider_id
   state
 }

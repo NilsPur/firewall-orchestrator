@@ -8,94 +8,73 @@ using OpenAI;
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace FWO.Middleware.Server.Services
 {
     /// <summary>
-    /// Builds and caches Microsoft Agent Framework agents from persisted FWO AI settings.
-    /// One agent is cached per provider/model configuration so that the streaming endpoint and
-    /// the session store share the same provider clients instead of rebuilding them per request.
+    /// Builds and caches the Microsoft Agent Framework agent for the fixed FWO assistant model.
     /// </summary>
-    public class AgentFactoryService(AiToolExecutionService toolExecutionService)
+    public class AgentFactoryService(AiToolExecutionService toolExecutionService, AiSettingsService settingsService)
     {
+        /// <summary>
+        /// Dependency-injection key and AG-UI agent name for the FWO assistant agent.
+        /// </summary>
+        public const string AgentName = "fwo-assistant";
+
         private readonly AiToolExecutionService toolExecutionService = toolExecutionService;
+        private readonly AiSettingsService settingsService = settingsService;
         private readonly ConcurrentDictionary<string, AIAgent> agentCache = new();
 
         /// <summary>
-        /// Resolves the provider and model for a session's fixed selection against current settings.
-        /// The provider is matched by its stable id so several providers of the same kind stay distinct.
+        /// Returns the configured assistant agent, building it on first use.
         /// </summary>
-        /// <exception cref="InvalidOperationException">The provider or model is missing or disabled.</exception>
-        public static (AiProviderConfig Provider, AiModelConfig Model) ResolveProviderModel(AiSettings settings, long providerId, string modelId)
+        /// <exception cref="InvalidOperationException">No enabled AI model is configured.</exception>
+        public async Task<AIAgent> GetAgent()
         {
-            AiProviderConfig provider = settings.Providers.FirstOrDefault(currentProvider => currentProvider.Id == providerId && currentProvider.Enabled)
-                ?? throw new InvalidOperationException($"AI provider '{providerId}' is not configured or is disabled.");
-            AiModelConfig model = provider.Models.FirstOrDefault(currentModel => currentModel.ModelId == modelId && currentModel.Enabled)
-                ?? throw new InvalidOperationException($"AI model '{modelId}' is not configured or is disabled.");
-            return (provider, model);
-        }
-
-        /// <summary>
-        /// Returns a cached agent for the given provider and model, building it on first use.
-        /// </summary>
-        public AIAgent GetOrBuildAgent(AiProviderConfig provider, AiModelConfig model)
-        {
-            return agentCache.GetOrAdd(CacheKey(provider, model), _ => BuildAgent(provider, model, toolExecutionService.CreateTools()));
+            AiSettings settings = await settingsService.GetSettings();
+            (AiProviderConfig Provider, AiModelConfig Model) selection = AiSettingsService.ResolveModel(settings)
+                ?? throw new InvalidOperationException("No enabled AI model is configured.");
+            return agentCache.GetOrAdd(CacheKey(selection.Provider, selection.Model, settings.SystemPrompt),
+                _ => BuildAgent(selection.Provider, selection.Model, toolExecutionService.CreateTools(), settings.SystemPrompt));
         }
 
         /// <summary>
         /// Builds a fresh agent for the given provider and model without caching.
         /// </summary>
-        public AIAgent BuildAgent(AiProviderConfig provider, AiModelConfig model, IList<AITool>? tools)
+        public AIAgent BuildAgent(AiProviderConfig provider, AiModelConfig model, IList<AITool>? tools, string systemPrompt = "")
         {
             ChatClientAgentOptions options = new()
             {
-                ChatOptions = BuildChatOptions(model, tools)
+                Name = AgentName,
+                Description = "Firewall Orchestrator assistant.",
+                ChatOptions = BuildChatOptions(model, tools, systemPrompt)
             };
 
-            // Create chat client with provider endpoint, retries, timeout and model specified.
-            IChatClient chatClient = provider.Kind switch
-            {
-                AiProviderKind.Ollama => CreateOllamaChatClient(provider, model),
-                AiProviderKind.OpenAi => CreateOpenAiChatClient(provider, model),
-                AiProviderKind.OpenAiCompatible => CreateOpenAiChatClient(provider, model),
-                AiProviderKind.Google => CreateGoogleChatClient(provider, model),
-                AiProviderKind.Anthropic => CreateAnthropicChatClient(provider, model),
-                _ => throw new InvalidOperationException("Selected AI provider is not supported.")
-            };
+            IChatClient chatClient = CreateLazyChatClient(provider, model);
 
             // Create ai agent with max output tokens, tools, temperature, top k / p, reasoning
             return chatClient.AsAIAgent(options);
         }
 
         /// <summary>
-        /// Runs a single non-streaming prompt to verify a provider/model can be selected, returning the reply text.
-        /// </summary>
-        public async Task<string> RunTest(AiProviderConfig provider, AiModelConfig model, string prompt, CancellationToken cancellationToken)
-        {
-            AIAgent agent = BuildAgent(provider, model, null);
-            AgentSession session = await agent.CreateSessionAsync(cancellationToken);
-            AgentResponse response = await agent.RunAsync([new ChatMessage(ChatRole.User, prompt)], session, new AgentRunOptions(), cancellationToken);
-            return response.Text;
-        }
-
-        /// <summary>
         /// Cache key that changes whenever a generation-relevant model setting changes, so edited
         /// configurations rebuild their agent instead of reusing a stale one.
         /// </summary>
-        private static string CacheKey(AiProviderConfig provider, AiModelConfig model)
+        private static string CacheKey(AiProviderConfig provider, AiModelConfig model, string systemPrompt)
         {
             return string.Join("|", provider.Id, provider.Kind, model.ModelId, provider.EndpointUrl, provider.ApiKeyEnvVariable,
                 model.Temperature, model.TopP, model.TopK, model.MaxOutputTokens, model.ReasoningEffort, provider.TimeoutSeconds,
-                provider.MaxRetries, model.ToolCallsSupported);
+                provider.MaxRetries, model.ToolCallsSupported, systemPrompt);
         }
 
-        internal static ChatOptions BuildChatOptions(AiModelConfig model, IList<AITool>? tools)
+        internal static ChatOptions BuildChatOptions(AiModelConfig model, IList<AITool>? tools, string systemPrompt = "")
         {
-            // Tool calling is opt-in because many local Ollama models reject chat requests that include tools.
+            // Tool calling is model-dependent, so fixed model capabilities decide whether tools are attached.
             IList<AITool>? effectiveTools = model.ToolCallsSupported == true ? tools : null;
             ChatOptions options = new()
             {
+                Instructions = string.IsNullOrWhiteSpace(systemPrompt) ? null : systemPrompt,
                 MaxOutputTokens = model.MaxOutputTokens,
                 Temperature = model.Temperature,
                 TopP = model.TopP,
@@ -108,6 +87,19 @@ namespace FWO.Middleware.Server.Services
                 ToolMode = effectiveTools == null ? null : ChatToolMode.Auto
             };
             return options;
+        }
+
+        private static IChatClient CreateLazyChatClient(AiProviderConfig provider, AiModelConfig model)
+        {
+            return new LazyChatClient(() => provider.Kind switch
+            {
+                AiProviderKind.Ollama => CreateOllamaChatClient(provider, model),
+                AiProviderKind.OpenAi => CreateOpenAiChatClient(provider, model),
+                AiProviderKind.OpenAiCompatible => CreateOpenAiChatClient(provider, model),
+                AiProviderKind.Google => CreateGoogleChatClient(provider, model),
+                AiProviderKind.Anthropic => CreateAnthropicChatClient(provider, model),
+                _ => throw new InvalidOperationException("Selected AI provider is not supported.")
+            });
         }
 
         private static IChatClient CreateOpenAiChatClient(AiProviderConfig provider, AiModelConfig model)
@@ -186,6 +178,56 @@ namespace FWO.Middleware.Server.Services
                 throw new InvalidOperationException($"Environment variable {provider.ApiKeyEnvVariable} is not set.");
             }
             return apiKey;
+        }
+
+        private sealed class LazyChatClient(Func<IChatClient> clientFactory) : IChatClient
+        {
+            private readonly Lazy<IChatClient> lazyClient = new(clientFactory, LazyThreadSafetyMode.ExecutionAndPublication);
+            private bool disposed;
+
+            private IChatClient Client
+            {
+                get
+                {
+                    ObjectDisposedException.ThrowIf(disposed, this);
+                    return lazyClient.Value;
+                }
+            }
+
+            /// <inheritdoc />
+            public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+            {
+                return Client.GetResponseAsync(messages, options, cancellationToken);
+            }
+
+            /// <inheritdoc />
+            public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            {
+                await foreach (ChatResponseUpdate update in Client.GetStreamingResponseAsync(messages, options, cancellationToken).WithCancellation(cancellationToken))
+                {
+                    yield return update;
+                }
+            }
+
+            /// <inheritdoc />
+            public object? GetService(Type serviceType, object? serviceKey = null)
+            {
+                if (serviceType.IsInstanceOfType(this))
+                {
+                    return this;
+                }
+                return lazyClient.IsValueCreated ? Client.GetService(serviceType, serviceKey) : null;
+            }
+
+            /// <inheritdoc />
+            public void Dispose()
+            {
+                disposed = true;
+                if (lazyClient.IsValueCreated)
+                {
+                    lazyClient.Value.Dispose();
+                }
+            }
         }
     }
 }
