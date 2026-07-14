@@ -223,7 +223,7 @@ Then retry commit.
 
 Notes:
 
-- `ruff` is pinned in this repo (`ruff==0.15.0`).
+- `ruff` is pinned in this repo (`ruff==0.15.20`).
 
 Temporary bypass only if absolutely necessary:
 

@@ -77,7 +77,7 @@ jobs:
 
       - uses: astral-sh/ruff-action@0ce1b0bf8b818ef400413f810f8a11cdbda0034b
         with:
-          version: "0.15.0"
+          version: "0.15.20"
 
       - name: pyright
         run: |
