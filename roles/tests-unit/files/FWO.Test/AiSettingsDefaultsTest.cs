@@ -17,6 +17,7 @@ namespace FWO.Test
 
             Assert.Multiple(() =>
             {
+                Assert.That(settings.Active, Is.True);
                 Assert.That(settings.SystemPrompt, Is.EqualTo(AiSettingsDefaults.SystemPrompt));
                 Assert.That(settings.Provider.Id, Is.EqualTo(1));
                 Assert.That(settings.Provider.Kind, Is.EqualTo(AiProviderKind.OpenAi));
@@ -41,7 +42,7 @@ namespace FWO.Test
         }
 
         [Test]
-        public void ResolveModel_ReturnsSingleEnabledModel()
+        public void ResolveModel_ReturnsConfiguredModelWhenAssistantIsActive()
         {
             (AiProviderConfig Provider, AiModelConfig Model)? selection = AiSettingsService.ResolveModel(new AiSettings());
 
@@ -53,11 +54,25 @@ namespace FWO.Test
         }
 
         [Test]
+        public void ResolveModel_ReturnsNullWhenAssistantIsInactive()
+        {
+            AiSettings settings = new() { Active = false };
+
+            (AiProviderConfig Provider, AiModelConfig Model)? selection = AiSettingsService.ResolveModel(settings);
+
+            Assert.That(selection, Is.Null);
+        }
+
+        [Test]
         public void AssistantSettings_ReturnsSingleModel()
         {
             AiAssistantSettings assistantSettings = AiSettingsService.CreateAssistantSettings(new AiSettings());
 
-            Assert.That(assistantSettings.Model.ModelId, Is.EqualTo(AiSettingsDefaults.ModelId));
+            Assert.Multiple(() =>
+            {
+                Assert.That(assistantSettings.Active, Is.True);
+                Assert.That(assistantSettings.Model.ModelId, Is.EqualTo(AiSettingsDefaults.ModelId));
+            });
         }
 
         [Test]
@@ -65,7 +80,7 @@ namespace FWO.Test
         {
             CapturingApiConnection apiConnection = new();
             AiSettingsService settingsService = new(apiConnection);
-            AiSettings settings = new() { SystemPrompt = "prompt" };
+            AiSettings settings = new() { Active = false, SystemPrompt = "prompt" };
 
             await settingsService.SaveSettings(settings);
 
@@ -76,10 +91,11 @@ namespace FWO.Test
             Assert.Multiple(() =>
             {
                 Assert.That(apiConnection.LastQuery, Is.EqualTo(AiQueries.saveAiSettings));
-                Assert.That(configItems.Single().Key, Is.EqualTo("system_prompt"));
-                Assert.That(configItems.Single().Value, Is.EqualTo("prompt"));
+                Assert.That(configItems.Single(item => item.Key == "aiAssistantActive").Value, Is.EqualTo("False"));
+                Assert.That(configItems.Single(item => item.Key == "system_prompt").Value, Is.EqualTo("prompt"));
                 Assert.That(provider["id"], Is.EqualTo(1L));
                 Assert.That(provider["kind"], Is.EqualTo("OpenAi"));
+                Assert.That(provider.ContainsKey("enabled"), Is.False);
                 Assert.That(GetProperty<string>(model, "model_id"), Is.EqualTo(AiSettingsDefaults.ModelId));
                 Assert.That(GetProperty<long>(model, "provider_id"), Is.EqualTo(1L));
                 Assert.That(GetProperty<bool?>(model, "tool_calls_supported"), Is.True);
@@ -147,7 +163,6 @@ namespace FWO.Test
                     "kind": "Ollama",
                     "display_name": "Ollama",
                     "endpoint_url": "http://127.0.0.1:11434",
-                    "enabled": true,
                     "models": [
                       {
                         "model_id": "qwen3.5:4b",
@@ -175,7 +190,12 @@ namespace FWO.Test
         {
             CapturingApiConnection apiConnection = new()
             {
-                ConfigResponseJson = """[{ "config_key": "system_prompt", "config_value": "stored prompt" }]""",
+                ConfigResponseJson = """
+                [
+                  { "config_key": "aiAssistantActive", "config_value": "false" },
+                  { "config_key": "system_prompt", "config_value": "stored prompt" }
+                ]
+                """,
                 ProviderResponseJson = """
                 [
                   {
@@ -183,7 +203,6 @@ namespace FWO.Test
                     "kind": "OpenAi",
                     "display_name": "OpenAI",
                     "api_key_env_variable": "OPENAI_API_KEY",
-                    "enabled": true,
                     "models": [
                       {
                         "model_id": "gpt-5.4-mini",
@@ -202,6 +221,7 @@ namespace FWO.Test
 
             Assert.Multiple(() =>
             {
+                Assert.That(settings.Active, Is.False);
                 Assert.That(settings.SystemPrompt, Is.EqualTo("stored prompt"));
                 Assert.That(settings.Provider.Kind, Is.EqualTo(AiProviderKind.OpenAi));
                 Assert.That(settings.Model.ProviderId, Is.EqualTo(1));

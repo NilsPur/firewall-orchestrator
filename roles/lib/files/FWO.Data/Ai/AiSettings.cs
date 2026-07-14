@@ -5,6 +5,9 @@ namespace FWO.Data.Ai
 {
     public class AiSettings
     {
+        [JsonProperty("active"), JsonPropertyName("active")]
+        public bool Active { get; set; } = true;
+
         [JsonProperty("system_prompt"), JsonPropertyName("system_prompt")]
         public string SystemPrompt { get; set; } = AiSettingsDefaults.SystemPrompt;
 
@@ -17,6 +20,9 @@ namespace FWO.Data.Ai
 
     public class AiAssistantSettings
     {
+        [JsonProperty("active"), JsonPropertyName("active")]
+        public bool Active { get; set; } = true;
+
         [JsonProperty("model"), JsonPropertyName("model")]
         public AiModelConfig Model { get; set; } = AiSettingsDefaults.CreateModel();
     }
@@ -48,9 +54,6 @@ namespace FWO.Data.Ai
 
         [JsonProperty("max_retries"), JsonPropertyName("max_retries")]
         public int MaxRetries { get; set; } = 1;
-
-        [JsonProperty("enabled"), JsonPropertyName("enabled")]
-        public bool Enabled { get; set; } = false;
 
         [JsonProperty("models"), JsonPropertyName("models")]
         public List<AiModelConfig> Models { get; set; } = [];

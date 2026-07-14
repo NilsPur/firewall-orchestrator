@@ -1,5 +1,5 @@
 query getAiSettings {
-  config(where: {config_user: {_eq: 0}, config_key: {_in: ["system_prompt"]}}) {
+  config(where: {config_user: {_eq: 0}, config_key: {_in: ["aiAssistantActive", "system_prompt"]}}) {
     config_key
     config_value
   }
@@ -11,7 +11,6 @@ query getAiSettings {
     api_key_env_variable
     timeout_seconds
     max_retries
-    enabled
     models(order_by: {id: asc}) {
       model_id
       display_name

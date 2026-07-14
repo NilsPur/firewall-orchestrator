@@ -7,9 +7,10 @@ CREATE TABLE IF NOT EXISTS "ai_provider"
 	"api_key_env_variable" Varchar NOT NULL Default '',
 	"timeout_seconds" Integer NOT NULL Default 60,
 	"max_retries" Integer NOT NULL Default 1,
-	"enabled" Boolean NOT NULL Default FALSE,
 	primary key ("id")
 );
+
+ALTER TABLE "ai_provider" DROP COLUMN IF EXISTS "enabled";
 
 CREATE TABLE IF NOT EXISTS "ai_model"
 (
@@ -53,11 +54,15 @@ CREATE INDEX IF NOT EXISTS idx_ai_session01 on ai_session (user_id);
 CREATE INDEX IF NOT EXISTS idx_ai_model01 on ai_model (provider_id);
 
 INSERT INTO config (config_key, config_value, config_user)
+VALUES ('aiAssistantActive', 'true', 0)
+ON CONFLICT (config_key, config_user) DO NOTHING;
+
+INSERT INTO config (config_key, config_value, config_user)
 VALUES ('system_prompt', 'You are the Firewall Orchestrator assistant. Answer using the user''s FWO access scope. Ground factual answers in data returned by FWO tools instead of assumptions. Use the appropriate read-only tool before answering factual FWO questions, and state when tool data is missing or insufficient.', 0)
 ON CONFLICT (config_key, config_user) DO NOTHING;
 
-INSERT INTO ai_provider (id, kind, display_name, endpoint_url, api_key_env_variable, enabled)
-SELECT 1, 'OpenAi', 'OpenAI', '', 'OPENAI_API_KEY', TRUE
+INSERT INTO ai_provider (id, kind, display_name, endpoint_url, api_key_env_variable)
+SELECT 1, 'OpenAi', 'OpenAI', '', 'OPENAI_API_KEY'
 WHERE NOT EXISTS (SELECT 1 FROM ai_provider);
 
 INSERT INTO ai_model (provider_id, model_id, display_name, enabled, streaming_supported, tool_calls_supported, vision_supported, reasoning_supported, context_size, max_output_tokens, reasoning_effort)

@@ -309,6 +309,27 @@ namespace FWO.Test
         }
 
         [Test]
+        public void ConfigData_DefaultsAiAssistantToActive()
+        {
+            ConfigData configData = new();
+
+            Assert.That(configData.AiAssistantActive, Is.True);
+        }
+
+        [Test]
+        public void Update_ParsesInactiveAiAssistantSetting()
+        {
+            SimulatedUserConfig userConfig = new();
+
+            InvokeUpdate(userConfig,
+            [
+                new() { Key = "aiAssistantActive", Value = "false", User = 0 }
+            ]);
+
+            Assert.That(userConfig.AiAssistantActive, Is.False);
+        }
+
+        [Test]
         public void ConfigData_DefaultsReqConsiderBundlingToFalse()
         {
             ConfigData configData = new();

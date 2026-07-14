@@ -22,8 +22,7 @@ namespace FWO.Data.Ai
                 Id = ProviderId,
                 DisplayName = ProviderDisplayName,
                 Kind = AiProviderKind.OpenAi,
-                ApiKeyEnvVariable = ApiKeyEnvVariable,
-                Enabled = true
+                ApiKeyEnvVariable = ApiKeyEnvVariable
             };
         }
 

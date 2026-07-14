@@ -3527,10 +3527,12 @@ INSERT INTO txt VALUES ('waiting_confirmation', 'German', 'Wartet auf Best&auml;
 INSERT INTO txt VALUES ('waiting_confirmation', 'English', 'Waiting for confirmation');
 INSERT INTO txt VALUES ('assistant_error', 'German', 'Assistent Fehler');
 INSERT INTO txt VALUES ('assistant_error', 'English', 'Assistant error');
+INSERT INTO txt VALUES ('ai_assistant_active', 'German', 'KI-Assistent aktiv');
+INSERT INTO txt VALUES ('ai_assistant_active', 'English', 'AI assistant active');
+INSERT INTO txt VALUES ('ai_assistant_disabled', 'German', 'Der KI-Assistent wurde in den globalen Einstellungen deaktiviert.');
+INSERT INTO txt VALUES ('ai_assistant_disabled', 'English', 'The AI assistant has been disabled in the global settings.');
 INSERT INTO txt VALUES ('retry', 'German', 'Erneut versuchen');
 INSERT INTO txt VALUES ('retry', 'English', 'Retry');
-INSERT INTO txt VALUES ('ai_provider_disabled', 'German', 'Anbieter ist deaktiviert.');
-INSERT INTO txt VALUES ('ai_provider_disabled', 'English', 'Provider is disabled.');
 INSERT INTO txt VALUES ('ai_provider_valid', 'German', 'Anbieterkonfiguration ist g&uuml;ltig.');
 INSERT INTO txt VALUES ('ai_provider_valid', 'English', 'Provider configuration is valid.');
 INSERT INTO txt VALUES ('ai_env_var_missing', 'German', 'Umgebungsvariable {0} ist nicht gesetzt.');
@@ -8666,7 +8668,7 @@ INSERT INTO txt VALUES ('H5912', 'English', 'Custom field key: Required only whe
 INSERT INTO txt VALUES ('H5913', 'German',  'Neu berechnen: Startet die Aktualisierung der Eigent&uuml;merzuordnung f&uuml;r bestehende Regeln auf Basis der aktuellen Konfiguration.');
 INSERT INTO txt VALUES ('H5913', 'English', 'Recalculate: Starts updating owner mappings for existing rules based on the current configuration.');
 
-INSERT INTO txt VALUES ('H9200', 'German', 'Der Assistent verwaltet Chatsitzungen, sendet Nachrichten an das konfigurierte Modell und zeigt Antworten, Werkzeugaufrufe und Fehler im Sitzungsverlauf an.');
-INSERT INTO txt VALUES ('H9200', 'English', 'The assistant manages chat sessions, sends messages to the configured model, and displays answers, tool calls, and errors in the session history.');
-INSERT INTO txt VALUES ('H9201', 'German', 'Diese Seite konfiguriert KI-Anbieter, Modelle und System Prompt. Die KI-Werkzeuge sind fest vorgegeben. Administratoren k&ouml;nnen &auml;ndern, Auditoren sehen die Einstellungen nur lesend.');
-INSERT INTO txt VALUES ('H9201', 'English', 'This page configures AI providers, models, and the system prompt. AI tools are fixed by the application. Administrators can edit the settings; auditors see them read-only.');
+INSERT INTO txt VALUES ('H9200', 'German', 'Der Assistent verwaltet Chatsitzungen, sendet Nachrichten an das konfigurierte Modell und zeigt Antworten, Werkzeugaufrufe und Fehler im Sitzungsverlauf an. Wenn der Assistent global deaktiviert ist, sind keine neuen Unterhaltungen oder Modellaufrufe m&ouml;glich.');
+INSERT INTO txt VALUES ('H9200', 'English', 'The assistant manages chat sessions, sends messages to the configured model, and displays answers, tool calls, and errors in the session history. When the assistant is globally disabled, no new conversations or model calls are available.');
+INSERT INTO txt VALUES ('H9201', 'German', 'Diese Seite aktiviert oder deaktiviert den KI-Assistenten global und konfiguriert KI-Anbieter, Modell und System Prompt. Die KI-Werkzeuge sind fest vorgegeben. Administratoren k&ouml;nnen &auml;ndern, Auditoren sehen die Einstellungen nur lesend.');
+INSERT INTO txt VALUES ('H9201', 'English', 'This page globally enables or disables the AI assistant and configures its provider, model, and system prompt. AI tools are fixed by the application. Administrators can edit the settings; auditors see them read-only.');

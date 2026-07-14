@@ -16,6 +16,16 @@
 
 @implements IDisposable
 
+@if (!SettingsLoaded)
+{
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+}
+else if (!Settings.Active)
+{
+    <div class="alert alert-info">@(userConfig.GetText("ai_assistant_disabled"))</div>
+}
+else
+{
 <div class="assistant-page">
     <div class="assistant-shell">
         <aside class="assistant-sidebar">
@@ -148,6 +158,7 @@
 
 <ConfirmDelete @bind-Display="DeleteSessionMode" PerformAction="DeleteCurrentSession" Title="@userConfig.GetText("delete_session")"
     DeleteMessage="@DeleteSessionMessage" AllowedRoles="" />
+}
 
 @code {
     [CascadingParameter]
@@ -157,6 +168,7 @@
     private AiSession? CurrentSession { get; set; }
     private List<AiChatMessage> Messages { get; set; } = [];
     private AiAssistantSettings Settings { get; set; } = new();
+    private bool SettingsLoaded { get; set; }
     private string SessionName { get; set; } = "";
     private string Prompt { get; set; } = "";
     private string LastPrompt { get; set; } = "";
@@ -184,7 +196,10 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadSettings();
-        await LoadSessions();
+        if (Settings.Active)
+        {
+            await LoadSessions();
+        }
     }
 
     private async Task LoadSettings()
@@ -204,6 +219,10 @@
         catch (Exception exception)
         {
             ShowAssistantError(exception.Message, exception);
+        }
+        finally
+        {
+            SettingsLoaded = true;
         }
     }
 

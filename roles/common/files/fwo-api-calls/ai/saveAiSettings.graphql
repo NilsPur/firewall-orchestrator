@@ -8,7 +8,7 @@ mutation saveAiSettings($configItems: [config_insert_input!]!, $provider: ai_pro
   delete_ai_provider(where: {id: {_neq: 1}}) {
     affected_rows
   }
-  insert_ai_provider_one(object: $provider, on_conflict: {constraint: ai_provider_pkey, update_columns: [kind, display_name, endpoint_url, api_key_env_variable, timeout_seconds, max_retries, enabled]}) {
+  insert_ai_provider_one(object: $provider, on_conflict: {constraint: ai_provider_pkey, update_columns: [kind, display_name, endpoint_url, api_key_env_variable, timeout_seconds, max_retries]}) {
     id
   }
   insert_ai_model_one(object: $model) {

@@ -23,7 +23,6 @@ namespace FWO.Test
                     "id": 1,
                     "kind": "OpenAi",
                     "display_name": "OpenAI",
-                    "enabled": true,
                     "models": [ { "model_id": "gpt-5.4-mini", "enabled": true } ]
                   }
                 ]
@@ -39,6 +38,28 @@ namespace FWO.Test
                 Assert.That(GetVariable<string>(variables, "modelId"), Is.EqualTo("gpt-5.4-mini"));
                 Assert.That(session.ModelId, Is.EqualTo("gpt-5.4-mini"));
             });
+        }
+
+        [Test]
+        public void CreateSession_RejectsInactiveAssistant()
+        {
+            CapturingApiConnection apiConnection = new()
+            {
+                ConfigResponseJson = """[{ "config_key": "aiAssistantActive", "config_value": "false" }]""",
+                ProviderResponseJson = """
+                [
+                  {
+                    "id": 1,
+                    "kind": "OpenAi",
+                    "display_name": "OpenAI",
+                    "models": [ { "model_id": "gpt-5.4-mini", "enabled": true } ]
+                  }
+                ]
+                """
+            };
+            AiSessionService sessionService = new(apiConnection, new AiSettingsService(apiConnection));
+
+            Assert.That(async () => await sessionService.CreateSession(1, null), Throws.InvalidOperationException);
         }
 
         [Test]

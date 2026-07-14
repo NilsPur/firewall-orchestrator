@@ -596,8 +596,9 @@ INSERT INTO config (config_key, config_value, config_user) VALUES ('refreshToken
 INSERT INTO config (config_key, config_value, config_user) VALUES ('refreshTokenLifetimeUnit', 'Days', 0);
 
 -- AI assistant
+INSERT INTO config (config_key, config_value, config_user) VALUES ('aiAssistantActive', 'true', 0);
 INSERT INTO config (config_key, config_value, config_user) VALUES ('system_prompt', 'You are the Firewall Orchestrator assistant. Answer using the user''s FWO access scope. Ground factual answers in data returned by FWO tools instead of assumptions. Use the appropriate read-only tool before answering factual FWO questions, and state when tool data is missing or insufficient.', 0);
-INSERT INTO ai_provider (id, kind, display_name, endpoint_url, api_key_env_variable, enabled) VALUES (1, 'OpenAi', 'OpenAI', '', 'OPENAI_API_KEY', TRUE);
+INSERT INTO ai_provider (id, kind, display_name, endpoint_url, api_key_env_variable) VALUES (1, 'OpenAi', 'OpenAI', '', 'OPENAI_API_KEY');
 INSERT INTO ai_model (provider_id, model_id, display_name, enabled, streaming_supported, tool_calls_supported, vision_supported, reasoning_supported, context_size, max_output_tokens, reasoning_effort)
 VALUES (1, 'gpt-5.4-mini', 'GPT-5.4 mini', TRUE, TRUE, TRUE, FALSE, TRUE, 400000, 128000, 2);
 SELECT setval(pg_get_serial_sequence('ai_provider', 'id'), (SELECT MAX(id) FROM ai_provider));

@@ -523,7 +523,6 @@ Create table "ai_provider"
 	"api_key_env_variable" Varchar NOT NULL Default '',
 	"timeout_seconds" Integer NOT NULL Default 60,
 	"max_retries" Integer NOT NULL Default 1,
-	"enabled" Boolean NOT NULL Default FALSE,
 	primary key ("id")
 );
 

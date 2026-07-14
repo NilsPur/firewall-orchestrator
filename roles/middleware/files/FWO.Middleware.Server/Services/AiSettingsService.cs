@@ -12,6 +12,7 @@ namespace FWO.Middleware.Server.Services
     /// </summary>
     public class AiSettingsService(ApiConnection apiConnection)
     {
+        private const string kAssistantActiveConfigKey = "aiAssistantActive";
         private readonly ApiConnection apiConnection = apiConnection;
 
         /// <summary>
@@ -48,7 +49,7 @@ namespace FWO.Middleware.Server.Services
         public static AiAssistantSettings CreateAssistantSettings(AiSettings settings)
         {
             NormalizeSingleSettings(settings);
-            return new AiAssistantSettings { Model = settings.Model };
+            return new AiAssistantSettings { Active = settings.Active, Model = settings.Model };
         }
 
         /// <summary>
@@ -61,6 +62,7 @@ namespace FWO.Middleware.Server.Services
             {
                 configItems = new List<ConfigItem>
                 {
+                    new() { Key = kAssistantActiveConfigKey, Value = settings.Active.ToString(), User = 0 },
                     new() { Key = "system_prompt", Value = settings.SystemPrompt, User = 0 }
                 },
                 provider = BuildProviderInsert(settings.Provider),
@@ -75,10 +77,6 @@ namespace FWO.Middleware.Server.Services
         /// </summary>
         public async Task<AiOperationResult> TestProvider(AiProviderConfig provider)
         {
-            if (!provider.Enabled)
-            {
-                return new AiOperationResult { Success = false, MessageKey = "ai_provider_disabled" };
-            }
             if (!string.IsNullOrWhiteSpace(provider.ApiKeyEnvVariable) && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(provider.ApiKeyEnvVariable)))
             {
                 return new AiOperationResult { Success = false, MessageKey = "ai_env_var_missing", MessageArgument = provider.ApiKeyEnvVariable };
@@ -91,12 +89,12 @@ namespace FWO.Middleware.Server.Services
         }
 
         /// <summary>
-        /// Resolves the single enabled provider/model pair.
+        /// Resolves the configured provider/model pair when the assistant is active.
         /// </summary>
         public static (AiProviderConfig Provider, AiModelConfig Model)? ResolveModel(AiSettings settings)
         {
             NormalizeSingleSettings(settings);
-            return settings.Provider.Enabled && settings.Model.Enabled ? (settings.Provider, settings.Model) : null;
+            return settings.Active && settings.Model.Enabled ? (settings.Provider, settings.Model) : null;
         }
 
         private static AiSettings CreateSettings(List<AiProviderConfig> providers)
@@ -114,8 +112,6 @@ namespace FWO.Middleware.Server.Services
             settings.Provider.DisplayName = string.IsNullOrWhiteSpace(settings.Provider.DisplayName)
                 ? AiSettingsDefaults.ProviderDisplayName
                 : settings.Provider.DisplayName;
-            settings.Provider.Enabled = true;
-
             settings.Model.ProviderId = settings.Provider.Id;
             settings.Model.ProviderDisplayName = settings.Provider.DisplayName;
             settings.Model.ProviderKind = settings.Provider.Kind;
@@ -127,6 +123,12 @@ namespace FWO.Middleware.Server.Services
 
         private static void ApplyConfigSettings(AiSettings settings, List<ConfigItem> configItems)
         {
+            ConfigItem? assistantActive = configItems.FirstOrDefault(item => item.Key == kAssistantActiveConfigKey);
+            if (bool.TryParse(assistantActive?.Value, out bool active))
+            {
+                settings.Active = active;
+            }
+
             ConfigItem? systemPrompt = configItems.FirstOrDefault(item => item.Key == "system_prompt");
             if (systemPrompt != null)
             {
@@ -144,8 +146,7 @@ namespace FWO.Middleware.Server.Services
                 ["endpoint_url"] = provider.EndpointUrl,
                 ["api_key_env_variable"] = provider.ApiKeyEnvVariable,
                 ["timeout_seconds"] = provider.TimeoutSeconds,
-                ["max_retries"] = provider.MaxRetries,
-                ["enabled"] = provider.Enabled
+                ["max_retries"] = provider.MaxRetries
             };
         }
 

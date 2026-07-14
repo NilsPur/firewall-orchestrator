@@ -7,7 +7,6 @@ query getAiProviders {
     api_key_env_variable
     timeout_seconds
     max_retries
-    enabled
     models(order_by: {id: asc}) {
       model_id
       display_name

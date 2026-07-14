@@ -36,6 +36,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("availableModules"), JsonPropertyName("availableModules")]
         public string AvailableModules { get; set; } = "";
 
+        [JsonProperty("aiAssistantActive"), JsonPropertyName("aiAssistantActive")]
+        public bool AiAssistantActive { get; set; } = true;
+
         [JsonProperty("maxMessages"), JsonPropertyName("maxMessages"), UserConfigData]
         public int MaxMessages { get; set; } = 3;
 
