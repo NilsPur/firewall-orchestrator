@@ -23,6 +23,19 @@ namespace FWO.Test
         }
 
         [Test]
+        public void CacheKey_ChangesWithProviderKind()
+        {
+            AiProviderConfig provider = BuildProvider();
+            AiModelConfig model = BuildModel();
+            string originalKey = InvokeCacheKey(provider, model, "prompt");
+
+            provider.Kind = AiProviderKind.Ollama;
+            string changedKey = InvokeCacheKey(provider, model, "prompt");
+
+            Assert.That(changedKey, Is.Not.EqualTo(originalKey));
+        }
+
+        [Test]
         public void CacheKey_ChangesWithToolCallsSupported()
         {
             AiProviderConfig provider = BuildProvider();

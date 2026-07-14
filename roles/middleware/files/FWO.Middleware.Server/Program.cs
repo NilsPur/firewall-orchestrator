@@ -104,12 +104,7 @@ builder.Services.AddSingleton<AiTranscriptService>();
 // Native AG-UI streaming endpoint for the fixed assistant agent.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAGUI();
-builder.Services.AddAIAgent(AgentFactoryService.AgentName,
-        (serviceProvider, name) => serviceProvider.GetRequiredService<AgentFactoryService>().GetAgent().GetAwaiter().GetResult())
-    .WithSessionStore((serviceProvider, name) => new FwoAgentSessionStore(
-            serviceProvider.GetRequiredService<AiSessionService>(),
-            serviceProvider.GetRequiredService<IHttpContextAccessor>()),
-        ServiceLifetime.Singleton, withIsolation: false);
+builder.Services.AddFwoAssistantAgent();
 
 builder.Services.AddAuthentication(confOptions =>
 {
