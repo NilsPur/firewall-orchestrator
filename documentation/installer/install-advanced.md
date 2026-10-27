@@ -150,6 +150,14 @@ e.g. if your hasura metadata file needs to be re-created from scratch, then use 
 ./scripts/run-playbook-with-sudo.sh site.yml -e "force_install=yes"
 ```
 
+### Parameter "apt_lock_timeout" to wait for background package updates (Debian, Ubuntu)
+
+On a freshly provisioned Debian or Ubuntu host, `apt-daily` and `unattended-upgrades` may hold the package manager lock for many minutes, and they can also start in the middle of an installation. Every apt task of the installer therefore waits up to `apt_lock_timeout` seconds (default 1800) for the lock instead of failing; `scripts/install-ansible-from-venv.sh` waits equally long. To fail sooner, e.g.:
+
+```console
+./scripts/run-playbook-with-sudo.sh site.yml -e "apt_lock_timeout=300"
+```
+
 ### Parameter "allow_unsupported_os" to install on an unsupported operating system release
 
 The installer stops before changing anything on an operating system release it does not support (supported are Red Hat 9+, Rocky 9+, Debian 12+ including Debian testing, and Ubuntu 22.04+ LTS). For development or for testing a new release, install anyway with a warning instead:

@@ -123,6 +123,10 @@ importer_venv_dir: "{{ fworch_home }}/importer/importer-venv"
 # scripts/customizing, since everything below that directory is offered as an import source
 customizing_venv_dir: "{{ fworch_home }}/scripts/customizing-venv"
 customizing_python_interpreter: "{{ importer_python_interpreter }}"
+# seconds every apt and package task waits for the dpkg lock (see module_defaults in site.yml).
+# apt-daily and unattended-upgrades may hold it for many minutes on a freshly provisioned
+# host; scripts/install-ansible-from-venv.sh waits as long for its own apt calls.
+apt_lock_timeout: 1800
 # units are installed into the local (admin owned) unit directory; the vendor directory is
 # package manager territory and is only kept around to find and clean up pre-11.0 installations
 fworch_systemd_unit_dir: /etc/systemd/system
