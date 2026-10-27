@@ -270,6 +270,17 @@ Generating a full hasura (all tables, etc. tracked) API documentation  currently
 
 api docu can then be accessed at <https://server/api_schema/index.html>
 
+### Parameter "install_ai_server" allows skipping the AI (MCP) server installation
+
+Default value is install_ai_server=yes: the installer adds the MCP server (`roles/ai`), which offers FWO tools and prompts to AI clients. It is always installed on the middleware host, as its own service `fworch-ai` next to the middleware, and listens on the loopback interface only (port `ai_internal_port`, default 8890). AI clients reach it through the Apache endpoint of the middleware, under the path `/mcp`: `https://<middleware host>:8888/mcp` (port `middleware_web_listener_port`), with the same certificate as the middleware. It accepts the access tokens issued by the middleware, see [MCP server](../auth/README.md#mcp-server).
+
+run installation without the AI (MCP) server:
+```console
+./scripts/run-playbook-with-sudo.sh site.yml -e "install_ai_server=no"
+```
+
+Setting the parameter to no on an existing installation removes the `/mcp` path from the Apache endpoint of the middleware, but leaves an already installed service untouched; stop it with `sudo systemctl disable --now fworch-ai`.
+
 ## User interface 
 
 ### Communication modes

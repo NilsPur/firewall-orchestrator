@@ -209,3 +209,17 @@ object lists at most 1000 items and the group lists at most 250, which is also t
 id; page with `limit` and `offset` (`options.limit`/`options.offset` for `getIpDataForOwners`) until the response
 header `X-Has-More` is `false`. `getFlowComplianceState` accepts at most 100 entries in each of `source`,
 `destination` and `service`, and at most 100 `policies`.
+
+### MCP server
+
+The MCP server (`roles/ai`, installed with `install_ai_server`) runs on the middleware host as its own service.
+AI clients connect to `https://<middleware host>:8888/mcp`, the Apache endpoint of the middleware, and send the
+access token returned by `POST /api/AuthenticationToken/GetTokenPair` as `Authorization: Bearer <token>`.
+It accepts only tokens of users holding at least one role other than `anonymous` and the
+technical roles (`middleware-server`, `importer`, `dbbackup`); other tokens get `403`. It reads the two settings
+above at startup as well, but counts on its own, separately from the middleware: every request of a user
+(identified by the `x-hasura-uuid` claim, otherwise by the user name) counts against at most
+`rate_limit_requests_per_minute` requests within any minute (the window moves on in steps of 10 seconds), and at
+most `rate_limit_concurrent_expensive_requests` requests of one user run at the same time; up to 4 further requests
+wait, the rest are rejected. Refused requests (`401`, `403`) do not count. Request bodies are limited to 1 MiB
+(`413` above), and rejected requests get `429` with `Retry-After: 60`.

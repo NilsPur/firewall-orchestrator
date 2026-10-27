@@ -117,6 +117,10 @@
 - name: internal service listener testing
   import_tasks: test-internal-service-listeners.yml
 
+- name: ai server testing
+  import_tasks: test-ai-mcp.yml
+  when: ai_server_on_host | bool
+
 - name: log permission testing
   import_tasks: test-log-permissions.yml
   when: "install_syslog | bool"

@@ -137,7 +137,7 @@ fworch_systemd_unit_search_dirs:
 # all systemd units owned by fworch (current and legacy names), used for relocation and uninstall
 fworch_systemd_unit_names: >-
   {{
-    [api_service_name, middleware_service_name, product_name ~ '-ui', product_name ~ '-importer-api']
+    [api_service_name, middleware_service_name, product_name ~ '-ui', product_name ~ '-importer-api', ai_service_name]
     + (api_legacy_service_names | default([]))
   }}
 # restart delay for all fworch services - long enough to keep a service that waits for a
@@ -187,9 +187,11 @@ fworch_systemd_start_limit_burst: 30
 fworch_ui_memory_max_percent: 50
 fworch_middleware_memory_max_percent: 30
 fworch_importer_memory_max_percent: 40
+fworch_ai_memory_max_percent: 20
 fworch_ui_memory_max: "{{ 'infinity' if fworch_ui_memory_max_percent | int <= 0 else ((ansible_facts['memtotal_mb'] | int * fworch_ui_memory_max_percent | int / 100) | round | int) ~ 'M' }}"
 fworch_middleware_memory_max: "{{ 'infinity' if fworch_middleware_memory_max_percent | int <= 0 else ((ansible_facts['memtotal_mb'] | int * fworch_middleware_memory_max_percent | int / 100) | round | int) ~ 'M' }}"
 fworch_importer_memory_max: "{{ 'infinity' if fworch_importer_memory_max_percent | int <= 0 else ((ansible_facts['memtotal_mb'] | int * fworch_importer_memory_max_percent | int / 100) | round | int) ~ 'M' }}"
+fworch_ai_memory_max: "{{ 'infinity' if fworch_ai_memory_max_percent | int <= 0 else ((ansible_facts['memtotal_mb'] | int * fworch_ai_memory_max_percent | int / 100) | round | int) ~ 'M' }}"
 
 ### internal certificate authority
 # Only the settings below are global. Everything else the internalCA role needs
@@ -575,6 +577,27 @@ middleware_native_uri: "http://{{ middleware_native_listener_address }}:{{ middl
 # fworch.json as login_trusted_client_hosts and resolved by the middleware at startup.
 login_trusted_client_hosts: "{{ (groups['frontends'] | default([])) + (groups['frontends'] | default([]) | map('extract', hostvars) | selectattr('ansible_host', 'defined') | map(attribute='ansible_host') | list) | unique }}"
 
+# ai (MCP) server, installed by default. Installed by roles/ai on the middleware host only (see the
+# middlewareserver play in site.yml), as its own service next to the middleware.
+install_ai_server: true
+# whether the ai server is installed on this host - the middleware's Apache vhost decides with it
+# whether to publish the MCP endpoint, the tests which checks to run
+ai_server_on_host: "{{ install_ai_server | bool and 'middlewareserver' in group_names }}"
+ai_dir: "{{ fworch_home }}/ai/files"
+ai_start_dir: "{{ ai_dir }}/FWO.Ai.Mcp"
+ai_service_name: "{{ product_name }}-ai"
+ai_internal_port: 8890
+# Loopback only, for the same reasons as middleware_native_listener_address: an IPv4
+# literal, because Kestrel binds every host name other than "localhost" to all interfaces.
+# The unit hands this url to Kestrel as ASPNETCORE_URLS.
+ai_native_listener_address: "{{ ipv4_loopback_address }}"
+ai_native_uri: "http://{{ ai_native_listener_address }}:{{ ai_internal_port }}/"
+# The path of the MCP endpoint. The ai server maps it (McpServerSetup.kMcpPath - keep both in
+# step), and the middleware's Apache vhost publishes it under the same path, which is how MCP
+# clients reach the ai server: https://<middleware_hostname>:<middleware_web_listener_port>/mcp
+ai_mcp_path: "/mcp"
+ai_native_mcp_uri: "http://{{ ai_native_listener_address }}:{{ ai_internal_port }}{{ ai_mcp_path }}"
+
 ###############################################################
 ui_admin_password_file: "{{ fworch_secrets_dir }}/ui_admin_pwd"
 ui_admin_testonly_password: "fworch.1"
@@ -625,6 +648,7 @@ syslog_proto: tcp
 syslog_port: 514
 middleware_server_syslog_id: "{{ product_name }}.middleware-server"
 ui_syslog_id: "{{ product_name }}-ui"
+ai_syslog_id: "{{ product_name }}-ai"
 ldap_syslog_id: slapd
 api_log_level: info
 fworch_log_dir: "/var/log/{{ product_name }}"
@@ -718,6 +742,7 @@ test_fortigate_name: "fortigate{{ test_postfix }}"
 test_checkpoint_name: "checkpoint{{ test_postfix }}"
 test_credential_name: "credential02_test"
 csharp_test_start_dir: "{{ fworch_home }}/test/csharp/FWO.Test"
+ai_test_start_dir: "{{ fworch_home }}/test/csharp/FWO.Ai.Tests"
 
 # make sure lib role is only run once per host to save time
 # set initially to false

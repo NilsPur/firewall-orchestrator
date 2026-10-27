@@ -1,0 +1,58 @@
+- name: copy ai server systemd service script
+  template:
+    src: fworch-ai.service.j2
+    dest: "{{ fworch_systemd_unit_dir }}/{{ ai_service_name }}.service"
+    mode: "0644"
+    owner: "root"
+  register: ai_service_template
+  become: true
+
+- name: track ai deployment changes from systemd template
+  set_fact:
+    ai_deploy_changed: "{{ (ai_deploy_changed | default(false)) or ai_service_template.changed }}"
+
+- name: publish ai server
+  command: "dotnet publish --no-self-contained -c {{ dotnet_mode }} -o {{ ai_start_dir }}/bin/{{ dotnet_mode }}/net{{ dotnet_version }}"
+  args:
+    chdir: "{{ ai_start_dir }}"
+  become: true
+  become_user: "{{ fworch_user }}"
+  environment: "{{ dotnet_env }}"
+  register: publish_result
+  when: ai_deploy_changed | default(false)
+
+- name: fail if publish returned an error
+  fail:
+    msg: "could not publish ai server successfully: {{ publish_result }}"
+  when: publish_result is defined and publish_result.rc is defined and publish_result.rc != 0
+
+- name: make ai server run at host startup
+  systemd:
+    name: "{{ ai_service_name }}"
+    enabled: true
+    daemon_reload: true
+  become: true
+
+# a service that exhausted its start rate limit stays failed and refuses to be restarted with
+# "start request repeated too quickly" until its state is cleared
+- name: clear any failed state of the ai server
+  command: "systemctl reset-failed {{ ai_service_name }}.service"
+  changed_when: false
+  failed_when: false
+  become: true
+  when: ai_deploy_changed | default(false)
+
+- name: start ai server
+  systemd:
+    name: "{{ ai_service_name }}"
+    state: restarted
+    daemon_reload: true
+  become: true
+  when: ai_deploy_changed | default(false)
+
+# a service that is not redeployed is still expected to run after an installer run
+- name: make sure the ai server is running
+  systemd:
+    name: "{{ ai_service_name }}"
+    state: started
+  become: true
