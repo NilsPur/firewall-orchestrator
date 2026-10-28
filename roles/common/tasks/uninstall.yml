@@ -103,9 +103,16 @@
     enabled: no
   ignore_errors: true
 
-- name: stop and disable {{ ai_service_name }}
+- name: stop and disable {{ ai_mcp_service_name }}
   service:
-    name: "{{ ai_service_name }}"
+    name: "{{ ai_mcp_service_name }}"
+    state: stopped
+    enabled: no
+  ignore_errors: true
+
+- name: stop and disable {{ ai_harness_service_name }}
+  service:
+    name: "{{ ai_harness_service_name }}"
     state: stopped
     enabled: no
   ignore_errors: true

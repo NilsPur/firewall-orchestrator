@@ -270,16 +270,18 @@ Generating a full hasura (all tables, etc. tracked) API documentation  currently
 
 api docu can then be accessed at <https://server/api_schema/index.html>
 
-### Parameter "install_ai_server" allows skipping the AI (MCP) server installation
+### Parameter "install_ai_server" allows skipping the AI (MCP) server and AI harness installation
 
-Default value is install_ai_server=yes: the installer adds the MCP server (`roles/ai`), which offers FWO tools and prompts to AI clients. It is always installed on the middleware host, as its own service `fworch-ai` next to the middleware, and listens on the loopback interface only (port `ai_internal_port`, default 8890). AI clients reach it through the Apache endpoint of the middleware, under the path `/mcp`: `https://<middleware host>:8888/mcp` (port `middleware_web_listener_port`), with the same certificate as the middleware. It accepts the access tokens issued by the middleware, see [MCP server](../auth/README.md#mcp-server).
+Default value is install_ai_server=yes: the installer adds the MCP server (`roles/ai`), which offers FWO tools and prompts to AI clients. It is always installed on the middleware host, as its own service `fworch-ai-mcp` next to the middleware, and listens on the loopback interface only (port `ai_mcp_internal_port`, default 8890). AI clients reach it through the Apache endpoint of the middleware, under the path `/mcp`: `https://<middleware host>:8888/mcp` (port `middleware_web_listener_port`), with the same certificate as the middleware. It accepts the access tokens issued by the middleware, see [AI servers](../auth/README.md#ai-servers).
 
-run installation without the AI (MCP) server:
+With the same parameter, the installer adds the AI harness (`roles/ai`), which runs an AI agent on the tools of the MCP server and offers it to user interfaces over AG-UI. It is installed on the middleware host as well. It has its own service `fworch-ai-harness` and listens on the loopback interface only (port `ai_harness_internal_port`, default 8891) and is reached through the Apache endpoint of the middleware under the path `/agui`: `https://<middleware host>:8888/agui`. It accepts the same access tokens as the MCP server. The installer does not configure an AI provider (provider, model, API key): the harness starts without one, but every run fails until one is configured.
+
+run installation without the AI (MCP) server and the AI harness:
 ```console
 ./scripts/run-playbook-with-sudo.sh site.yml -e "install_ai_server=no"
 ```
 
-Setting the parameter to no on an existing installation removes the `/mcp` path from the Apache endpoint of the middleware, but leaves an already installed service untouched; stop it with `sudo systemctl disable --now fworch-ai`.
+Setting the parameter to no on an existing installation removes the `/mcp` and `/agui` paths from the Apache endpoint of the middleware, but leaves already installed services untouched; stop them with `sudo systemctl disable --now fworch-ai-mcp fworch-ai-harness`. An uninstallation (`installation_mode=uninstall`) removes both services.
 
 ## User interface 
 

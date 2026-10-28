@@ -33,21 +33,35 @@
         owner: "{{ fworch_user }}"
         group: "{{ fworch_group }}"
 
-    - name: copy ai files to the middleware host
+    - name: copy ai mcp files to the middleware host
       ansible.posix.synchronize:
         src: "FWO.Ai.Mcp"
         dest: "{{ ai_dir }}"
         rsync_opts:
           - "--delete"
           - "--chown={{ fworch_user }}:{{ fworch_group }}"
-      register: ai_sync_result
+      register: ai_mcp_sync_result
+      tags: [ 'test' ]
+
+    - name: copy ai harness files to the middleware host
+      ansible.posix.synchronize:
+        src: "FWO.Ai.Harness"
+        dest: "{{ ai_dir }}"
+        rsync_opts:
+          - "--delete"
+          - "--chown={{ fworch_user }}:{{ fworch_group }}"
+      register: ai_harness_sync_result
       tags: [ 'test' ]
 
     - name: track ai deployment changes
       set_fact:
-        ai_deploy_changed: "{{ ai_sync_result.changed or installation_mode == 'new' }}"
+        ai_mcp_deploy_changed: "{{ ai_mcp_sync_result.changed or installation_mode == 'new' }}"
+        ai_harness_deploy_changed: "{{ ai_harness_sync_result.changed or installation_mode == 'new' }}"
 
   become: true
 
-- name: install and run ai service
-  import_tasks: install_and_run_ai_service.yml
+- name: install and run ai mcp service
+  import_tasks: install_and_run_ai_mcp_service.yml
+
+- name: install and run ai harness service
+  import_tasks: install_and_run_ai_harness_service.yml

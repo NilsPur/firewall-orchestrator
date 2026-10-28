@@ -21,7 +21,7 @@ internal class UserTools(IHttpContextAccessor httpContextAccessor)
     /// <summary>
     /// Returns name and roles taken from the validated access token of the current request.
     /// </summary>
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true)]
     [Description("Returns the name and the FWO roles of the user the access token was issued for.")]
     public CurrentUser GetCurrentUser()
     {

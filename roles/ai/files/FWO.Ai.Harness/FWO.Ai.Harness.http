@@ -1,0 +1,37 @@
+@HostAddress = http://localhost:6297
+# accessToken returned by POST /api/AuthenticationToken/GetTokenPair of the middleware server
+@AccessToken = <access token>
+
+# a run on a new thread; send the same threadId with the next run to continue the conversation
+POST {{HostAddress}}/agui
+Accept: text/event-stream
+Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
+
+{
+    "threadId": "thread-1",
+    "runId": "run-1",
+    "messages": [
+        { "id": "message-1", "role": "user", "content": "Which roles do I have?" }
+    ]
+}
+
+###
+
+# a run sending an MCP prompt of the MCP server as the user's turn
+POST {{HostAddress}}/agui
+Accept: text/event-stream
+Content-Type: application/json
+Authorization: Bearer {{AccessToken}}
+
+{
+    "threadId": "thread-2",
+    "runId": "run-1",
+    "messages": [],
+    "forwardedProps": {
+        "prompt": {
+            "name": "check_access_request_reason",
+            "arguments": { "reason": "Needed for the monthly payroll export to the bank." }
+        }
+    }
+}

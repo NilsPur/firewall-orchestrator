@@ -210,7 +210,7 @@ id; page with `limit` and `offset` (`options.limit`/`options.offset` for `getIpD
 header `X-Has-More` is `false`. `getFlowComplianceState` accepts at most 100 entries in each of `source`,
 `destination` and `service`, and at most 100 `policies`.
 
-### MCP server
+### AI servers
 
 The MCP server (`roles/ai`, installed with `install_ai_server`) runs on the middleware host as its own service.
 AI clients connect to `https://<middleware host>:8888/mcp`, the Apache endpoint of the middleware, and send the
@@ -223,3 +223,7 @@ above at startup as well, but counts on its own, separately from the middleware:
 most `rate_limit_concurrent_expensive_requests` requests of one user run at the same time; up to 4 further requests
 wait, the rest are rejected. Refused requests (`401`, `403`) do not count. Request bodies are limited to 1 MiB
 (`413` above), and rejected requests get `429` with `Retry-After: 60`.
+
+The AI harness (`roles/ai`, installed with the MCP server) offers an AI agent on the MCP tools at
+`https://<middleware host>:8888/agui`. It accepts the same tokens as the MCP server and calls the MCP server with the
+token of the request, so the agent has exactly the rights of the calling user.

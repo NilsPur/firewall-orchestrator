@@ -32,7 +32,7 @@ internal static class McpTestServer
 
     private static readonly RSAParameters KeyPair = CreateKeyPair();
     internal static readonly RsaSecurityKey PrivateKey = new(KeyPair);
-    private static readonly RsaSecurityKey PublicKey = new(new RSAParameters { Modulus = KeyPair.Modulus, Exponent = KeyPair.Exponent });
+    internal static readonly RsaSecurityKey PublicKey = new(new RSAParameters { Modulus = KeyPair.Modulus, Exponent = KeyPair.Exponent });
 
     /// <summary>
     /// Starts the MCP server pipeline on a test server, validating tokens with the test public key.
@@ -43,6 +43,18 @@ internal static class McpTestServer
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         return await BuildAndStart(builder, rateLimitSettings ?? new McpRateLimitSettings());
+    }
+
+    /// <summary>
+    /// Starts the MCP server pipeline on a test server and adds test-only configuration to its MCP server,
+    /// e.g. a tool or prompt the production server does not offer, or a request filter.
+    /// </summary>
+    /// <param name="configureMcpServer">Adds the test-only configuration</param>
+    internal static async Task<WebApplication> StartWith(Action<IMcpServerBuilder> configureMcpServer)
+    {
+        WebApplicationBuilder builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        return await BuildAndStart(builder, new McpRateLimitSettings(), configureMcpServer);
     }
 
     /// <summary>
@@ -65,10 +77,15 @@ internal static class McpTestServer
         return new Uri(addresses.Addresses.First());
     }
 
-    private static async Task<WebApplication> BuildAndStart(WebApplicationBuilder builder, McpRateLimitSettings rateLimitSettings)
+    /// <summary>
+    /// Adds the services of the MCP server pipeline, with optional test-only configuration of its MCP server, and starts it.
+    /// </summary>
+    private static async Task<WebApplication> BuildAndStart(WebApplicationBuilder builder, McpRateLimitSettings rateLimitSettings,
+        Action<IMcpServerBuilder>? configureMcpServer = null)
     {
         builder.Services.AddFwoJwtAuthentication(PublicKey);
         builder.Services.AddFwoMcpServer(rateLimitSettings);
+        configureMcpServer?.Invoke(builder.Services.AddMcpServer());
 
         WebApplication app = builder.Build();
         app.MapFwoMcp();

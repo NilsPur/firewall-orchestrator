@@ -215,9 +215,10 @@ internal class McpRequestApplicationPromptsTest
         await using McpClient client = await McpTestServer.ConnectAsync(httpClient, Roles.Requester);
 
         IList<McpClientPrompt> prompts = await client.ListPromptsAsync();
+        List<McpClientPrompt> requestPrompts = prompts.Where(prompt => kAllPrompts.Contains(prompt.Name)).ToList();
 
-        Assert.That(prompts.Select(prompt => prompt.Name), Is.EquivalentTo(kAllPrompts));
-        foreach (McpClientPrompt prompt in prompts)
+        Assert.That(requestPrompts.Select(prompt => prompt.Name), Is.EquivalentTo(kAllPrompts));
+        foreach (McpClientPrompt prompt in requestPrompts)
         {
             PromptArgument reasonArgument = prompt.ProtocolPrompt.Arguments!.Single(argument => argument.Name == kReasonArgument);
             Assert.That(reasonArgument.Required, Is.True);

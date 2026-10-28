@@ -1,12 +1,16 @@
 using FWO.Ai.Mcp.Tools;
+using FWO.Basics;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
+using ModelContextProtocol.Client;
 using NUnit.Framework;
 
 namespace FWO.Ai.Tests;
 
 /// <summary>
-/// Tests the MCP user tools outside of an authenticated request; the authenticated case is covered by
-/// <see cref="McpServerAuthenticationTest"/>.
+/// Tests the MCP user tools outside of an authenticated request, and the read-only annotation of the FWO tools;
+/// the authenticated case is covered by <see cref="McpServerAuthenticationTest"/>.
 /// </summary>
 [TestFixture]
 internal class McpUserToolsTest
@@ -35,5 +39,23 @@ internal class McpUserToolsTest
 
         Assert.That(currentUser.Name, Is.Empty);
         Assert.That(currentUser.Roles, Is.Empty);
+    }
+
+    /// <summary>
+    /// Verifies that the FWO tools are announced as read-only, as the harness calls only read-only tools without
+    /// asking the user for approval.
+    /// </summary>
+    [TestCase(HarnessTestSetup.kCurrentUserTool)]
+    [TestCase(HarnessTestSetup.kRandomNumberTool)]
+    public async Task ListTools_AnnouncesToolAsReadOnly(string toolName)
+    {
+        await using WebApplication app = await McpTestServer.Start();
+        using HttpClient httpClient = app.GetTestClient();
+        await using McpClient client = await McpTestServer.ConnectAsync(httpClient, Roles.Admin);
+
+        IList<McpClientTool> tools = await client.ListToolsAsync();
+
+        McpClientTool tool = tools.Single(listedTool => listedTool.Name == toolName);
+        Assert.That(tool.ProtocolTool.Annotations?.ReadOnlyHint, Is.True);
     }
 }

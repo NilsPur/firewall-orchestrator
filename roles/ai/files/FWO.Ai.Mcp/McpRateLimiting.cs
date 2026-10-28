@@ -1,3 +1,4 @@
+using FWO.Basics;
 using FWO.Config.File;
 using FWO.Logging;
 using Microsoft.AspNetCore.RateLimiting;
@@ -73,7 +74,6 @@ internal static class McpRateLimiting
     private const int kSegmentsPerWindow = 6;
     private const string kUserDnPartitionPrefix = "dn:";
     private const string kUserNamePartitionPrefix = "name:";
-    private const string kUserDnClaimType = "x-hasura-uuid";
     private static readonly TimeSpan kBudgetWindow = TimeSpan.FromMinutes(1);
 
     /// <summary>
@@ -135,7 +135,7 @@ internal static class McpRateLimiting
     /// </summary>
     internal static string GetPartitionKey(ClaimsPrincipal user)
     {
-        string? userDn = user.FindFirstValue(kUserDnClaimType);
+        string? userDn = user.FindFirstValue(JwtClaimTypes.kUserDn);
         if (!string.IsNullOrWhiteSpace(userDn))
         {
             return kUserDnPartitionPrefix + userDn;

@@ -14,7 +14,7 @@ internal class RandomNumberTools
     /// <summary>
     /// Generates a random number; only offered to callers holding one of the listed roles.
     /// </summary>
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true)]
     [Description("Generates a random number between the specified minimum and maximum values.")]
     [Authorize(Roles = $"{Roles.Admin}, {Roles.Auditor}")]
     public int GetRandomNumber(

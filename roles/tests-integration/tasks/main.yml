@@ -117,8 +117,12 @@
 - name: internal service listener testing
   import_tasks: test-internal-service-listeners.yml
 
-- name: ai server testing
+- name: ai mcp server testing
   import_tasks: test-ai-mcp.yml
+  when: ai_server_on_host | bool
+
+- name: ai harness testing
+  import_tasks: test-ai-harness.yml
   when: ai_server_on_host | bool
 
 - name: log permission testing
