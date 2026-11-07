@@ -634,6 +634,7 @@ INSERT INTO txt VALUES ('whats_new_facts', 'German', '
     <li>LDAP: Eine Verbindung kann bis zu 10 Server (Replikate) eines Verzeichnisses enthalten, die der Reihe nach versucht werden. Aktive Verbindungen d&uuml;rfen keine gleichen Such- oder Schreibpfade haben; bisher als getrennte Verbindungen eingerichtete Replikate m&uuml;ssen zu einer Verbindung zusammengefasst werden. Lokale Nutzer werden an die unver&auml;nderliche Objekt-Id ihres Verzeichniseintrags gebunden, daher muss sich nach dem Upgrade jeder Nutzer einmal mit Passwort anmelden.</li>
     <li>Die Auftr&auml;ge &quot;Objekt anlegen&quot; und &quot;Objekt &auml;ndern&quot; unterst&uuml;tzen Zeitobjekte mit Name, Start- und Endzeit.</li>
     <li>Neuer REST-Aufruf <code>resolvePathDevices</code>: ermittelt die Firewalls auf den Pfaden zwischen Quell- und Zieladressen (Bereiche oder Netze, je bis zu 100) mit dem Network-Zone-Tree-Algorithmus. Algorithmus und Zonenmatrix k&ouml;nnen angegeben werden, sonst gelten die Einstellungen. Die Antwort nennt jedes Ger&auml;t einmal sowie den verwendeten Algorithmus und die verwendete Matrix.</li>
+    <li>Modellierung: Die fachliche Begr&uuml;ndung einer Verbindung, die Beschreibung einer Schnittstelle oder die Begr&uuml;ndung einer Schnittstellennutzung kann per Schaltfl&auml;che von einer KI bewertet werden (stichhaltig, unzureichend, nicht stichhaltig), mit R&uuml;ckfragen an den Antragsteller und einem Verbesserungsvorschlag. Die Funktion wird in den Modellierungseinstellungen aktiviert und ben&ouml;tigt den KI-Server mit einem konfigurierten KI-Anbieter.</li>
     <li>Details: siehe <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">Release Notes.</a></li>
 </ul>
 ');
@@ -666,6 +667,7 @@ INSERT INTO txt VALUES ('whats_new_facts', 'English', '
     <li>LDAP: a connection can list up to 10 servers (replicas) of one directory, which are tried in order. Active connections must not share a search or write path; replicas configured as separate connections so far have to be combined into one connection. Local users are bound to the immutable object id of their directory entry, so every user has to log in with password once after the upgrade.</li>
     <li>The tasks &quot;create object&quot; and &quot;modify object&quot; support time objects with name, start and end time.</li>
     <li>New REST call <code>resolvePathDevices</code>: determines the firewalls on the paths between source and destination addresses (ranges or networks, up to 100 each) using the network zone tree algorithm. Algorithm and zone matrix can be specified, otherwise the settings apply. The response lists each device once together with the algorithm and matrix used.</li>
+    <li>Modelling: The functional reason of a connection, the description of an interface or the reason of an interface usage can be assessed by an AI at the push of a button (genuine, insufficient, not genuine), with questions to the requester and a proposal for improvement. The feature is activated in the modelling settings and needs the AI server with a configured AI provider.</li>
     <li>Details: see <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">release notes.</a></li>
 </ul>
 ');
@@ -2203,6 +2205,18 @@ INSERT INTO txt VALUES ('last_requested',		'German', 	'Letzte Beantragung');
 INSERT INTO txt VALUES ('last_requested',		'English', 	'Last Requested');
 INSERT INTO txt VALUES ('permitted_owners',		'German', 	'Berechtigte Applikationen');
 INSERT INTO txt VALUES ('permitted_owners',		'English', 	'Permitted Applications');
+INSERT INTO txt VALUES ('ai_check_reason',      'German', 	'Begr&uuml;ndung mit KI pr&uuml;fen');
+INSERT INTO txt VALUES ('ai_check_reason',      'English', 	'Check Reason with AI');
+INSERT INTO txt VALUES ('ai_checking',          'German', 	'KI pr&uuml;ft...');
+INSERT INTO txt VALUES ('ai_checking',          'English', 	'AI is checking...');
+INSERT INTO txt VALUES ('ai_verdict_genuine',   'German', 	'Stichhaltig');
+INSERT INTO txt VALUES ('ai_verdict_genuine',   'English', 	'Genuine');
+INSERT INTO txt VALUES ('ai_verdict_insufficient', 'German', 'Unzureichend');
+INSERT INTO txt VALUES ('ai_verdict_insufficient', 'English', 'Insufficient');
+INSERT INTO txt VALUES ('ai_verdict_not_genuine', 'German', 	'Nicht stichhaltig');
+INSERT INTO txt VALUES ('ai_verdict_not_genuine', 'English', 	'Not Genuine');
+INSERT INTO txt VALUES ('ai_verdict_unknown',   'German', 	'Ohne Bewertung');
+INSERT INTO txt VALUES ('ai_verdict_unknown',   'English', 	'No Verdict');
 
 -- compliance
 INSERT INTO txt VALUES ('compliance',			'German', 	'Compliance');
@@ -3279,6 +3293,8 @@ INSERT INTO txt VALUES ('allowServerInConn',    'German', 	'Server in Verbindung
 INSERT INTO txt VALUES ('allowServerInConn',    'English', 	'Allow Servers in Connection');
 INSERT INTO txt VALUES ('allowServiceInConn',   'German', 	'Einfache Dienste in Verbindung erlauben');
 INSERT INTO txt VALUES ('allowServiceInConn',   'English', 	'Allow Simple Services in Connection');
+INSERT INTO txt VALUES ('modAiReasonCheck',     'German', 	'KI-Pr&uuml;fung der Begr&uuml;ndung');
+INSERT INTO txt VALUES ('modAiReasonCheck',     'English', 	'AI Check of Reason');
 INSERT INTO txt VALUES ('overviewDisplayLines', 'German', 	'Max. Anzahl Zeilen in &Uuml;bersicht');
 INSERT INTO txt VALUES ('overviewDisplayLines', 'English', 	'Max. Number of Rows in Overview');
 INSERT INTO txt VALUES ('reducedProtocolSet',   'German',   'Reduzierten Protokollset darstellen');
@@ -4774,6 +4790,8 @@ INSERT INTO txt VALUES ('U9044', 'German',  'Benachrichtigungen an App-Verantwor
 INSERT INTO txt VALUES ('U9044', 'English', 'Notifications were sent to App responsibles.');
 INSERT INTO txt VALUES ('U9045', 'German',  'Die Regel-Eigent&uuml;mer-Zuordnung ist gerade nicht verwendbar. Der Soll-Ist-Abgleich kann deshalb l&auml;nger dauern als gewohnt.');
 INSERT INTO txt VALUES ('U9045', 'English', 'The rule owner mapping cannot be used right now. The variance analysis may therefore take longer than usual.');
+INSERT INTO txt VALUES ('U9046', 'German',  'Diese Bewertung wurde von einer KI erstellt und kann falsch sein. Die Entscheidung liegt weiterhin bei der verantwortlichen Person.');
+INSERT INTO txt VALUES ('U9046', 'English', 'This assessment was generated by an AI and may be wrong. The decision remains with the responsible person.');
 
 -- error messages
 INSERT INTO txt VALUES ('E0001', 'German',  'Nicht klassifizierter Fehler: ');
@@ -5205,6 +5223,30 @@ INSERT INTO txt VALUES ('E9030', 'German',  'App Rollen dieser Applikation d&uum
 INSERT INTO txt VALUES ('E9030', 'English', 'Application roles of this application may only be changed by its owners with the modeller role.');
 INSERT INTO txt VALUES ('E9031', 'German',  'Nicht alle Benachrichtigungen an App-Verantwortliche konnten gesendet werden.');
 INSERT INTO txt VALUES ('E9031', 'English', 'Not all notifications could be sent to App responsibles.');
+INSERT INTO txt VALUES ('E9032', 'German',  'Die Begr&uuml;ndung ist leer oder l&auml;nger als @@MAX_LENGTH@@ Zeichen.');
+INSERT INTO txt VALUES ('E9032', 'English', 'The reason is empty or longer than @@MAX_LENGTH@@ characters.');
+INSERT INTO txt VALUES ('E9033', 'German',  'Die KI wollte eine Aktion ausf&uuml;hren, die Daten &auml;ndert. Das wird bei der Pr&uuml;fung der Begr&uuml;ndung nicht unterst&uuml;tzt.');
+INSERT INTO txt VALUES ('E9033', 'English', 'The AI wanted to run an action that changes data. This is not supported when checking the reason.');
+INSERT INTO txt VALUES ('E9034', 'German',  'Die KI konnte keine Antwort geben.');
+INSERT INTO txt VALUES ('E9034', 'English', 'The AI could not answer.');
+INSERT INTO txt VALUES ('E9035', 'German',  'Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.');
+INSERT INTO txt VALUES ('E9035', 'English', 'Your session has expired. Please log in again.');
+INSERT INTO txt VALUES ('E9036', 'German',  'Sie sind nicht berechtigt, den KI-Assistenten zu nutzen.');
+INSERT INTO txt VALUES ('E9036', 'English', 'You are not permitted to use the AI assistant.');
+INSERT INTO txt VALUES ('E9037', 'German',  'Zu viele KI-Anfragen. Bitte versuchen Sie es sp&auml;ter erneut.');
+INSERT INTO txt VALUES ('E9037', 'English', 'Too many AI requests. Please try again later.');
+INSERT INTO txt VALUES ('E9038', 'German',  'Zu viele KI-Anfragen. Bitte versuchen Sie es in @@SECONDS@@ Sekunden erneut.');
+INSERT INTO txt VALUES ('E9038', 'English', 'Too many AI requests. Please try again in @@SECONDS@@ seconds.');
+INSERT INTO txt VALUES ('E9040', 'German',  'Die Anfrage an den KI-Assistenten ist zu gro&szlig;.');
+INSERT INTO txt VALUES ('E9040', 'English', 'The request to the AI assistant is too large.');
+INSERT INTO txt VALUES ('E9041', 'German',  'Der KI-Assistent ist nicht erreichbar oder nicht installiert. Bitte wenden Sie sich an den Administrator.');
+INSERT INTO txt VALUES ('E9041', 'English', 'The AI assistant cannot be reached or is not installed. Please contact the administrator.');
+INSERT INTO txt VALUES ('E9042', 'German',  'Der KI-Assistent hat einen Fehler gemeldet, z.B. weil kein KI-Anbieter konfiguriert ist. Bitte wenden Sie sich an den Administrator.');
+INSERT INTO txt VALUES ('E9042', 'English', 'The AI assistant failed, e.g. because no AI provider is configured. Please contact the administrator.');
+INSERT INTO txt VALUES ('E9043', 'German',  'Der KI-Assistent hat nicht rechtzeitig geantwortet. Bitte versuchen Sie es sp&auml;ter erneut.');
+INSERT INTO txt VALUES ('E9043', 'English', 'The AI assistant did not answer in time. Please try again later.');
+INSERT INTO txt VALUES ('E9044', 'German',  'Die Antwort des KI-Assistenten war ung&uuml;ltig.');
+INSERT INTO txt VALUES ('E9044', 'English', 'The answer of the AI assistant was invalid.');
 INSERT INTO txt VALUES ('E9101', 'German',  'Fehler bei externer Auftragserzeugung.');
 INSERT INTO txt VALUES ('E9101', 'English', 'Error at external ticket creation.');
 INSERT INTO txt VALUES ('E9102', 'German',  'Fehler beim &Auml;ndern des externen Auftragsstatus.');
@@ -7664,6 +7706,8 @@ INSERT INTO txt VALUES ('H5603', 'German',  'Server in Verbindung erlauben: Steu
 INSERT INTO txt VALUES ('H5603', 'English', 'Allow Servers in Connection: Controls, if App Servers are offered in the Library besides the App Roles for direct use in the connections.');
 INSERT INTO txt VALUES ('H5604', 'German',  'Einfache Dienste in Verbindung erlauben: Steuert, ob in der Bibliothek neben den Servicegruppen auch einfache Services zur direkten Verwendung in den Verbindungen angeboten werden.');
 INSERT INTO txt VALUES ('H5604', 'English', 'Allow Simple Services in Connection: Controls, if simple Services are offered in the Library besides the Service Groups for direct use in the connections.');
+INSERT INTO txt VALUES ('H5604a', 'German',  'KI-Pr&uuml;fung der Begr&uuml;ndung: Zeigt im Bearbeiten-Dialog von Verbindungen und Schnittstellen eine Schaltfl&auml;che, mit der die fachliche Begr&uuml;ndung bzw. Schnittstellenbeschreibung von einer KI bewertet werden kann. Daf&uuml;r muss der KI-Server (KI-Assistent) installiert und ein KI-Anbieter konfiguriert sein. Die Begr&uuml;ndung und die Elemente der Verbindung werden dabei an den konfigurierten KI-Anbieter gesendet. Standardm&auml;&szlig;ig deaktiviert.');
+INSERT INTO txt VALUES ('H5604a', 'English', 'AI Check of Reason: Shows a button in the edit dialog of connections and interfaces, with which the functional reason or interface description can be assessed by an AI. This requires the AI server (AI assistant) to be installed with a configured AI provider. The reason and the elements of the connection are sent to the configured AI provider. Deactivated by default.');
 INSERT INTO txt VALUES ('H5605', 'German',  'Max. Anzahl Zeilen in &Uuml;bersicht: Definiert die Zeilenzahl innerhalb eines Eintrags in der &Uuml;bersichtstabelle der Verbindungen, ab der die Elemente eingeklappt dargestellt werden.
     Wird vom Administrator allgemein vorausgew&auml;hlt, kann aber vom Nutzer in den pers&ouml;nlichen Einstellungen &uuml;berschrieben werden.
 ');
@@ -9914,6 +9958,8 @@ INSERT INTO txt VALUES ('H9084', 'German',  'Logdaten: Sind Logdaten aktiviert, 
 INSERT INTO txt VALUES ('H9084', 'English', 'Log data: If log data is enabled, the imported log data of the owner is displayed below the connection, sorted by log count by default and sortable by every column.');
 INSERT INTO txt VALUES ('H9086', 'German',  'Formatierung: Fachliche Begr&uuml;ndung und Schnittstellenbeschreibung d&uuml;rfen einfache Formatierungen enthalten: &lt;b&gt;, &lt;i&gt;, &lt;u&gt;, &lt;s&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;mark&gt;, &lt;small&gt;, &lt;sub&gt;, &lt;sup&gt;, &lt;br&gt;, &lt;hr&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;li&gt;, &lt;span&gt;, &lt;div&gt; und &lt;font&gt;. Farben werden &uuml;ber style=color:red, style=background-color:#ffff00, &lt;font color=green&gt; oder die Klassen text-* und bg-* (z.B. class=text-danger) gesetzt. Andere Tags werden als Text angezeigt, andere Attribute entfernt.');
 INSERT INTO txt VALUES ('H9086', 'English', 'Formatting: Functional reason and interface description may contain simple formatting: &lt;b&gt;, &lt;i&gt;, &lt;u&gt;, &lt;s&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;mark&gt;, &lt;small&gt;, &lt;sub&gt;, &lt;sup&gt;, &lt;br&gt;, &lt;hr&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;li&gt;, &lt;span&gt;, &lt;div&gt; and &lt;font&gt;. Colors are set with style=color:red, style=background-color:#ffff00, &lt;font color=green&gt; or the classes text-* and bg-* (e.g. class=text-danger). Other tags are shown as text, other attributes are removed.');
+INSERT INTO txt VALUES ('H9087', 'German',  'KI-Pr&uuml;fung der Begr&uuml;ndung: Ist sie vom Administrator aktiviert, l&auml;sst die Schaltfl&auml;che "Begr&uuml;ndung mit KI pr&uuml;fen" unter der fachlichen Begr&uuml;ndung bzw. Schnittstellenbeschreibung diese von einer KI bewerten. Die Antwort erscheint, w&auml;hrend sie entsteht, und kann abgebrochen werden. Die Bewertung lautet "Stichhaltig" (alle Kriterien einer stichhaltigen Begr&uuml;ndung sind erf&uuml;llt), "Unzureichend" (ein fachlicher Zweck ist erkennbar, aber nicht jedes Kriterium erf&uuml;llt) oder "Nicht stichhaltig" (kein fachlicher Zweck erkennbar). Dazu nennt die KI die gepr&uuml;ften Kriterien, R&uuml;ckfragen an den Antragsteller und einen Vorschlag f&uuml;r eine verbesserte Begr&uuml;ndung. Die KI bewertet nur und &auml;ndert nichts, die Entscheidung bleibt bei der verantwortlichen Person. Die Begr&uuml;ndung, der Name, die App sowie Quellen, Ziele und Dienste der Verbindung werden an den konfigurierten KI-Anbieter gesendet.');
+INSERT INTO txt VALUES ('H9087', 'English', 'AI check of the reason: If activated by the administrator, the button "Check Reason with AI" below the functional reason or interface description has it assessed by an AI. The answer appears while it is being written and can be cancelled. The verdict is "Genuine" (all criteria of a genuine justification are met), "Insufficient" (a business purpose is recognisable, but not every criterion is met) or "Not Genuine" (no business purpose is recognisable). In addition the AI names the criteria checked, questions to the requester and a proposal for an improved justification. The AI only assesses and changes nothing, the decision stays with the responsible person. The reason, the name, the app and the sources, destinations and services of the connection are sent to the configured AI provider.');
 INSERT INTO txt VALUES ('H5901', 'German',  'Verantwortlichkeitsstufen f&uuml;r Eigent&uuml;mer verwalten. Sie k&ouml;nnen Stufen anlegen, bearbeiten, reaktivieren und l&ouml;schen. Beim L&ouml;schen pr&uuml;ft FWOrch, ob die Stufe noch verwendet wird.');
 INSERT INTO txt VALUES ('H5901', 'English', 'Manage responsible levels for owners. You can create, edit, reactivate and delete levels. On delete, FWOrch checks whether the level is still in use.');
 INSERT INTO txt VALUES ('H5902', 'German',  'Diese Einstellungen vergeben keine Rollen. Sie steuern nur die UI-Zugriffs- und Aktionsm&ouml;glichkeiten f&uuml;r verantwortliche Benutzer/Gruppen.');

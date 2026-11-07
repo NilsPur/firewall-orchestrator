@@ -67,6 +67,7 @@ insert into config (config_key, config_value, config_user) VALUES ('creationTole
 insert into config (config_key, config_value, config_user) VALUES ('ruleOwnershipMode', 'mixed', 0);
 insert into config (config_key, config_value, config_user) VALUES ('allowServerInConn', 'True', 0);
 insert into config (config_key, config_value, config_user) VALUES ('allowServiceInConn', 'True', 0);
+insert into config (config_key, config_value, config_user) VALUES ('modAiReasonCheck', 'False', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importAppDataStartAt', '00:00:00', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importAppDataSleepTime', '0', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importSubnetDataStartAt', '00:00:00', 0);

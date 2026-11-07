@@ -8,21 +8,21 @@ namespace FWO.Ai.Harness.Agent;
 
 /// <summary>
 /// Creates the agents of the FWO users on Microsoft Agent Framework. All users share one <see cref="ChatClientAgent"/>
-/// that runs the agent loop, holds the history of the sessions and offers no tools itself. For each request the harness
-/// creates an <see cref="FwoUserAgent"/>, which calls the tools of the FWO MCP server with the JWT of the calling user.
-/// One factory serves all users of the harness server and is thread-safe.
+/// that runs the agent loop, keeps no history (the harness is stateless) and offers no tools itself. For each request
+/// the harness creates an <see cref="FwoUserAgent"/>, which calls the tools of the FWO MCP server with the JWT of the
+/// calling user. One factory serves all users of the harness server and is thread-safe.
 /// </summary>
 public sealed class FwoAgentFactory : IDisposable
 {
     /// <summary>
-    /// Name of the shared agent and of every user agent. The AG-UI hosting identifies the stored sessions by it.
+    /// Name of the shared agent and of every user agent.
     /// </summary>
     public const string kAgentName = "fwo-agent";
 
     private const int kMinIterationsPerRequest = 1;
 
     private readonly IChatClient agentLoopClient;
-    private readonly InMemoryChatHistoryProvider historyProvider;
+    private readonly IChatReducer historyReducer;
     private readonly ChatClientAgent sharedAgent;
     private readonly ILoggerFactory? loggerFactory;
     private readonly Func<HttpMessageHandler>? mcpHandlerFactory;
@@ -61,10 +61,9 @@ public sealed class FwoAgentFactory : IDisposable
             AgentSettings settings = agentSettings.CreateSnapshot();
             this.loggerFactory = loggerFactory;
             this.mcpHandlerFactory = mcpHandlerFactory;
-            IChatReducer historyReducer = HistoryCompaction.CreateReducer(providerClient, contextWindowTokens, reserveTokens);
-            historyProvider = CreateHistoryProvider(historyReducer);
+            historyReducer = HistoryCompaction.CreateReducer(providerClient, contextWindowTokens, reserveTokens);
             agentLoopClient = CreateAgentLoopClient(providerClient, settings, loggerFactory);
-            sharedAgent = new ChatClientAgent(agentLoopClient, CreateAgentOptions(historyProvider), loggerFactory);
+            sharedAgent = new ChatClientAgent(agentLoopClient, CreateAgentOptions(), loggerFactory);
         }
         catch
         {
@@ -83,20 +82,7 @@ public sealed class FwoAgentFactory : IDisposable
     {
         ArgumentNullException.ThrowIfNull(userConnection);
         ObjectDisposedException.ThrowIf(disposed, this);
-        return new FwoUserAgent(sharedAgent, userConnection, mcpHandlerFactory, loggerFactory);
-    }
-
-    /// <summary>
-    /// Returns a copy of the stored history of a session: the messages sent and the responses including the tool calls
-    /// and tool results of the agent loop, the older part replaced by a summary once it has been compacted.
-    /// The instructions are not part of it.
-    /// </summary>
-    /// <param name="session">Session of a user agent of this factory</param>
-    internal IReadOnlyList<ChatMessage> GetHistory(AgentSession session)
-    {
-        ArgumentNullException.ThrowIfNull(session);
-        List<ChatMessage> storedMessages = historyProvider.GetMessages(session);
-        return new List<ChatMessage>(storedMessages).AsReadOnly();
+        return new FwoUserAgent(sharedAgent, historyReducer, userConnection, mcpHandlerFactory, loggerFactory);
     }
 
     /// <summary>
@@ -164,29 +150,38 @@ public sealed class FwoAgentFactory : IDisposable
     }
 
     /// <summary>
-    /// Creates the in-memory history of the sessions, kept in each session: compacted before a turn once it grows too
-    /// long, and without the tool calls the agent loop left unanswered.
+    /// Creates the history of the shared agent, which stores nothing: the harness is stateless and every run sends the
+    /// whole conversation, so a session used for more than one run must not add its history to the next run.
     /// </summary>
-    private static InMemoryChatHistoryProvider CreateHistoryProvider(IChatReducer historyReducer)
+    private static InMemoryChatHistoryProvider CreateStatelessHistoryProvider()
     {
         InMemoryChatHistoryProviderOptions historyOptions = new()
         {
-            ChatReducer = historyReducer,
-            StorageInputResponseMessageFilter = UnansweredToolCallFilter.Apply
+            StorageInputRequestMessageFilter = _ => Enumerable.Empty<ChatMessage>(),
+            StorageInputResponseMessageFilter = _ => Enumerable.Empty<ChatMessage>()
         };
         return new InMemoryChatHistoryProvider(historyOptions);
     }
 
     /// <summary>
-    /// Creates the options of the shared agent: its name and the history. The instructions and the tools are set per
-    /// run, see <see cref="FwoUserAgent"/>.
+    /// Creates the options of the shared agent: its name and a history that stores nothing. The instructions and the
+    /// tools are set per run, see <see cref="FwoUserAgent"/>.
     /// </summary>
-    private static ChatClientAgentOptions CreateAgentOptions(InMemoryChatHistoryProvider historyProvider)
+    /// <remarks>
+    /// The binding of approval answers to the approval requests recorded in the session is disabled: the harness keeps
+    /// no session between runs, so the binding would drop every answer. The harness trusts the answers of the client
+    /// instead, an approved call runs as the answer names it, with the tools and the JWT of the user. The bypass of
+    /// read-only tools stays: in a response that also calls a tool requiring approval, only that tool is asked for,
+    /// and the read-only calls of that response are dropped, as their stored approval does not outlive the run; the
+    /// model may call them again.
+    /// </remarks>
+    internal static ChatClientAgentOptions CreateAgentOptions()
     {
         return new ChatClientAgentOptions
         {
             Name = kAgentName,
-            ChatHistoryProvider = historyProvider
+            ChatHistoryProvider = CreateStatelessHistoryProvider(),
+            DisableApprovalResponseBinding = true
         };
     }
 }

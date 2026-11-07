@@ -29,8 +29,8 @@ public class AgentSettings
     public int MaxConsecutiveErrorsPerRequest { get; set; } = kDefaultMaxConsecutiveErrorsPerRequest;
 
     /// <summary>
-    /// Tokens of the context window kept free of stored history: the older part of the history is summarized before
-    /// a turn once the history exceeds the context window minus this reserve. The reserve has to hold the instructions,
+    /// Tokens of the context window kept free of the conversation: the older part of the conversation is summarized
+    /// before a turn once it exceeds the context window minus this reserve. The reserve has to hold the instructions,
     /// the tool definitions, the new messages of the turn, the tool results of the agent loop and the answer.
     /// Must be positive and smaller than the context window, and larger than the maximum number of output tokens
     /// if that is set; a quarter of the context window if null.

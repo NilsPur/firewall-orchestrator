@@ -22,14 +22,17 @@ public class HarnessSettings
     /// <summary>Default number of runs a user may start within any minute.</summary>
     public const int kDefaultRunsPerMinute = 10;
 
-    /// <summary>Default number of conversations (AG-UI threads) kept per user.</summary>
-    public const int kDefaultMaxSessionsPerUser = 10;
-
-    /// <summary>Default number of runs a user may run at the same time, each on a thread of its own.</summary>
+    /// <summary>Default number of runs a user may run at the same time.</summary>
     public const int kDefaultMaxConcurrentRunsPerUser = 3;
 
-    /// <summary>Default time after which an unused conversation is dropped.</summary>
-    public static readonly TimeSpan kDefaultSessionIdleTimeout = TimeSpan.FromHours(4);
+    /// <summary>
+    /// Default maximum request body size of the AG-UI endpoint (4 MiB). The harness is stateless, so a client sends the
+    /// whole conversation with every run; the compaction keeps it within the context window of the model.
+    /// </summary>
+    public const long kDefaultMaxRequestBodyBytes = 4L * 1024 * 1024;
+
+    /// <summary>Largest maximum request body size that may be configured (64 MiB).</summary>
+    public const long kMaxRequestBodyBytesLimit = 64L * 1024 * 1024;
 
     private const string kMcpEndpointPurpose = "MCP endpoint";
 
@@ -45,20 +48,14 @@ public class HarnessSettings
     /// <summary>Runs (AG-UI requests) a user may start within any minute; must be positive.</summary>
     public int RunsPerMinute { get; set; } = kDefaultRunsPerMinute;
 
-    /// <summary>
-    /// Conversations (AG-UI threads) kept per user; when a user starts one more, the least recently used one is
-    /// dropped. Must be positive.
-    /// </summary>
-    public int MaxSessionsPerUser { get; set; } = kDefaultMaxSessionsPerUser;
-
-    /// <summary>
-    /// Runs a user may run at the same time, each on a thread of its own: a thread runs one run at a time. Must be
-    /// positive and at most <see cref="MaxSessionsPerUser"/>, as more runs would drop each other's conversations.
-    /// </summary>
+    /// <summary>Runs a user may run at the same time; must be positive.</summary>
     public int MaxConcurrentRunsPerUser { get; set; } = kDefaultMaxConcurrentRunsPerUser;
 
-    /// <summary>Time after which a conversation that was not used is dropped; must be positive.</summary>
-    public TimeSpan SessionIdleTimeout { get; set; } = kDefaultSessionIdleTimeout;
+    /// <summary>
+    /// Maximum request body size of the AG-UI endpoint in bytes; larger requests get 413. It bounds the conversation a
+    /// client sends with each run. Must be positive and at most <see cref="kMaxRequestBodyBytesLimit"/>.
+    /// </summary>
+    public long MaxRequestBodyBytes { get; set; } = kDefaultMaxRequestBodyBytes;
 
     /// <summary>AI provider, model, credentials and context window; checked when the agent factory is created.</summary>
     public AiProviderSettings Provider { get; set; } = new();
@@ -88,10 +85,9 @@ public class HarnessSettings
         ArgumentNullException.ThrowIfNull(McpEndpoint);
         EndpointGuard.RequireHttpsOrLoopback(McpEndpoint, kMcpEndpointPurpose);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(RunsPerMinute);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxSessionsPerUser);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxConcurrentRunsPerUser);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(MaxConcurrentRunsPerUser, MaxSessionsPerUser);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(SessionIdleTimeout, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxRequestBodyBytes);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(MaxRequestBodyBytes, kMaxRequestBodyBytesLimit);
         if (McpConnectionTimeout is TimeSpan connectionTimeout)
         {
             ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(connectionTimeout, TimeSpan.Zero);

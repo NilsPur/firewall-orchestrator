@@ -3,14 +3,14 @@ using Microsoft.Extensions.AI;
 namespace FWO.Ai.Harness.Agent;
 
 /// <summary>
-/// Filter of the response messages an agent stores in its history.
+/// Filter of the response messages the harness returns in the conversation of a run, see <see cref="ConversationSnapshot"/>.
 /// </summary>
 internal static class UnansweredToolCallFilter
 {
     /// <summary>
     /// Returns the response messages without the tool calls the agent loop left unanswered: after the maximum number
     /// of iterations the model is asked once more without tools, and a call it still makes there gets no result.
-    /// The providers reject a history holding a tool call without result, so storing it would break every later turn.
+    /// The providers reject a history holding a tool call without result, so returning it would break every later turn.
     /// Only function calls without a function result in the same response are removed, and a message left without
     /// contents is dropped; tool approval requests and responses are kept as they are.
     /// </summary>

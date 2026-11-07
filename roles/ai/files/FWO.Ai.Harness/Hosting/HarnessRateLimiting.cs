@@ -16,16 +16,10 @@ internal static class HarnessRateLimiting
 {
     /// <summary>
     /// Policy of the AG-UI endpoint: at most the configured number of runs per user at a time, without waiting. It
-    /// limits the load a user puts on the AI provider; that a thread runs one run at a time is ensured by
-    /// <see cref="SingleRunPerThreadFilter"/>.
+    /// limits the load a user puts on the AI provider. The harness keeps no state between runs, so runs of one thread
+    /// may run at the same time as well.
     /// </summary>
     public const string kRunPolicy = "agent-run";
-
-    /// <summary>
-    /// Maximum request body size of the AG-UI endpoint; larger bodies get 413. The server keeps the conversation, so
-    /// a client only needs to send the new input; a conversation an AG-UI client sends again counts towards the limit.
-    /// </summary>
-    public const long kMaxRequestBodyBytes = 1024 * 1024;
 
     /// <summary>Retry hint for rejected requests.</summary>
     public const int kRetryAfterSeconds = 60;
@@ -89,8 +83,8 @@ internal static class HarnessRateLimiting
     }
 
     /// <summary>
-    /// Returns the partition of a caller: the user's directory identity, which the AG-UI endpoint requires and which
-    /// also isolates the user's sessions, else the user name. Callers without either share one partition.
+    /// Returns the partition of a caller: the user's directory identity, which the AG-UI endpoint requires, else the
+    /// user name. Callers without either share one partition.
     /// </summary>
     internal static string GetPartitionKey(ClaimsPrincipal user)
     {

@@ -233,7 +233,7 @@ internal class HarnessFwoAgentFactoryTest
     }
 
     /// <summary>
-    /// Verifies that the user agents of a factory run on one shared chat client agent named for the session store,
+    /// Verifies that the user agents of a factory run on one shared chat client agent with the name of the agent,
     /// with one function invocation with the configured limits, without detailed errors and without concurrent calls.
     /// </summary>
     [Test]
@@ -277,7 +277,7 @@ internal class HarnessFwoAgentFactoryTest
 
     /// <summary>
     /// Verifies that the instructions of the MCP server reach the model as option of every request, not as a message,
-    /// and are not stored in the history.
+    /// and are not part of the conversation the harness returns.
     /// </summary>
     [Test]
     public async Task RunAsync_SendsInstructionsOfMcpServerAsOptionAndNotAsMessage()
@@ -287,14 +287,14 @@ internal class HarnessFwoAgentFactoryTest
             .RespondWithFunctionCall(kCallId, HarnessTestSetup.kCurrentUserTool).RespondWithText(kAnswer).RespondWithText(kAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
 
-        await agent.RunAsync(kQuestion, session);
-        await agent.RunAsync(kQuestion, session);
+        List<AgentResponseUpdate> firstUpdates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
+        List<ChatMessage> nextMessages = [.. HarnessTestSetup.GetSnapshot(firstUpdates), new ChatMessage(ChatRole.User, kQuestion)];
+        List<AgentResponseUpdate> nextUpdates = await HarnessTestSetup.RunStreamingAsync(agent, nextMessages);
 
         Assert.That(chatClient.ReceivedOptions.Select(options => options?.Instructions), Has.All.EqualTo(HarnessTestSetup.kInstructions));
         Assert.That(chatClient.ReceivedMessages.SelectMany(messages => messages).Select(message => message.Role), Has.None.EqualTo(ChatRole.System));
-        Assert.That(HarnessTestSetup.GetTexts(factory.GetHistory(session)), Has.None.Contains(HarnessTestSetup.kInstructions));
+        Assert.That(HarnessTestSetup.GetTexts(HarnessTestSetup.GetSnapshot(nextUpdates)), Has.None.Contains(HarnessTestSetup.kInstructions));
         Assert.That(chatClient.Rejections, Is.Empty);
     }
 
@@ -363,7 +363,7 @@ internal class HarnessFwoAgentFactoryTest
 
     /// <summary>
     /// Verifies that a failing tool call fails the turn once the configured number of consecutive errors is exceeded,
-    /// leaving the history unchanged.
+    /// without a snapshot, so that the client keeps the conversation it sent.
     /// </summary>
     [Test]
     public async Task RunAsync_WithFailingToolAndNoErrorsAllowed_FailsTurn()
@@ -374,12 +374,18 @@ internal class HarnessFwoAgentFactoryTest
             .Respond((_, _, _) => tokenProvider.FailFromNowOn(ScriptedChatClient.CreateFunctionCallResponse(kCallId, HarnessTestSetup.kCurrentUserTool)));
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient, new AgentSettings { MaxConsecutiveErrorsPerRequest = kNoErrorsAllowed });
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, tokenProvider.GetTokenAsync);
-        AgentSession session = await agent.CreateSessionAsync();
+        List<AgentResponseUpdate> updates = new();
 
-        Assert.CatchAsync<Exception>(async () => await agent.RunAsync(kQuestion, session));
+        Assert.CatchAsync<Exception>(async () =>
+        {
+            await foreach (AgentResponseUpdate update in agent.RunStreamingAsync(kQuestion))
+            {
+                updates.Add(update);
+            }
+        });
 
         Assert.That(chatClient.ReceivedMessages, Has.Count.EqualTo(1));
-        Assert.That(factory.GetHistory(session), Is.Empty);
+        Assert.That(updates.Any(HarnessTestSetup.IsSnapshot), Is.False);
     }
 
     /// <summary>

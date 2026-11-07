@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- experimental in Microsoft Agent Framework 1.26: the history compaction (SummarizationCompactionStrategy,
-         CompactionTriggers) and the session store of the AG-UI hosting (AgentSessionStore, AgentSessionStoreKey) -->
+         CompactionTriggers) -->
     <NoWarn>$(NoWarn);MAAI001</NoWarn>
   </PropertyGroup>
 

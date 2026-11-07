@@ -7,8 +7,6 @@
 		<IsTestProject>true</IsTestProject>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<!-- the session store of the harness builds on the experimental session store types of Microsoft Agent Framework -->
-		<NoWarn>$(NoWarn);MAAI001</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -25,6 +23,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\..\..\ai\files\FWO.Ai.Mcp\FWO.Ai.Mcp.csproj" />
 		<ProjectReference Include="..\..\..\ai\files\FWO.Ai.Harness\FWO.Ai.Harness.csproj" />
+		<ProjectReference Include="..\..\..\lib\files\FWO.Ai.Client\FWO.Ai.Client.csproj" />
 	</ItemGroup>
 
 </Project>

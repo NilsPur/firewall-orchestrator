@@ -163,10 +163,11 @@ internal class HarnessUnansweredToolCallFilterTest
     /// <summary>
     /// Verifies the bound of the agent loop: with at most 2 iterations the model is asked 3 times, as each iteration
     /// is a round trip of tool calls, and the last request offers no tools, so the model has to answer. A call the model
-    /// still makes there is returned, but not stored, so that a strict provider accepts the next turn.
+    /// still makes there is streamed, but not part of the conversation the turn returns, so that a strict provider
+    /// accepts the next turn.
     /// </summary>
     [Test]
-    public async Task RunAsync_ToolCallAfterMaxIterations_IsReturnedButNotStored()
+    public async Task RunStreamingAsync_ToolCallAfterMaxIterations_IsStreamedButNotReturnedInConversation()
     {
         await using WebApplication app = await McpTestServer.Start();
         int callNumber = 0;
@@ -177,30 +178,29 @@ internal class HarnessUnansweredToolCallFilterTest
         };
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient, new AgentSettings { MaxIterationsPerRequest = kMaxIterationsPerRequest });
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
 
-        AgentResponse response = await agent.RunAsync(kQuestion, session);
+        List<AgentResponseUpdate> updates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
 
         List<ChatOptions?> requestOptions = chatClient.ReceivedOptions;
         Assert.That(requestOptions, Has.Count.EqualTo(kMaxIterationsPerRequest + 1));
         Assert.That(requestOptions.Take(kMaxIterationsPerRequest).Select(HarnessTestSetup.OffersTools), Has.All.True);
         Assert.That(HarnessTestSetup.OffersTools(requestOptions[^1]), Is.False);
         string unansweredCallId = $"{kCallIdPrefix}{kMaxIterationsPerRequest + 1}";
-        Assert.That(HarnessTestSetup.GetCallIds(response.Messages), Does.Contain(unansweredCallId));
-        IReadOnlyList<ChatMessage> history = factory.GetHistory(session);
-        List<string> historyCallIds = HarnessTestSetup.GetCallIds(history);
-        Assert.That(historyCallIds, Has.Count.EqualTo(kMaxIterationsPerRequest));
-        Assert.That(historyCallIds, Does.Not.Contain(unansweredCallId));
-        Assert.That(historyCallIds, Is.EquivalentTo(HarnessTestSetup.GetResultCallIds(history)));
-        await AssertNextTurnAcceptedAsync(agent, session, chatClient);
+        Assert.That(HarnessTestSetup.GetCallIds(updates.ToAgentResponse().Messages), Does.Contain(unansweredCallId));
+        List<ChatMessage> conversation = HarnessTestSetup.GetSnapshot(updates);
+        List<string> conversationCallIds = HarnessTestSetup.GetCallIds(conversation);
+        Assert.That(conversationCallIds, Has.Count.EqualTo(kMaxIterationsPerRequest));
+        Assert.That(conversationCallIds, Does.Not.Contain(unansweredCallId));
+        Assert.That(conversationCallIds, Is.EquivalentTo(HarnessTestSetup.GetResultCallIds(conversation)));
+        await AssertNextTurnAcceptedAsync(agent, conversation, chatClient);
     }
 
     /// <summary>
-    /// Verifies that the text of a last answer that also holds an unanswered call is stored without the call, while
-    /// the response returned to the caller is left unchanged.
+    /// Verifies that the text of a last answer that also holds an unanswered call is part of the conversation the turn
+    /// returns without the call, while the streamed response is left unchanged.
     /// </summary>
     [Test]
-    public async Task RunAsync_TextWithToolCallAfterMaxIterations_StoresTextWithoutCall()
+    public async Task RunStreamingAsync_TextWithToolCallAfterMaxIterations_ReturnsTextWithoutCall()
     {
         await using WebApplication app = await McpTestServer.Start();
         ChatMessage textWithCall = new(ChatRole.Assistant, new List<AIContent>
@@ -213,26 +213,26 @@ internal class HarnessUnansweredToolCallFilterTest
             .Respond((_, _, _) => Task.FromResult(new ChatResponse(textWithCall)));
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient, new AgentSettings { MaxIterationsPerRequest = kSingleIteration });
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
 
-        AgentResponse response = await agent.RunAsync(kQuestion, session);
+        List<AgentResponseUpdate> updates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
 
-        Assert.That(HarnessTestSetup.GetCallIds(response.Messages), Does.Contain(kUnansweredCallId));
-        IReadOnlyList<ChatMessage> history = factory.GetHistory(session);
-        Assert.That(history[^1].Text, Is.EqualTo(kAnswer));
-        Assert.That(history[^1].Contents.OfType<FunctionCallContent>(), Is.Empty);
-        Assert.That(HarnessTestSetup.GetCallIds(history), Is.EqualTo(kAnsweredCallOnly));
-        await AssertNextTurnAcceptedAsync(agent, session, chatClient);
+        Assert.That(HarnessTestSetup.GetCallIds(updates.ToAgentResponse().Messages), Does.Contain(kUnansweredCallId));
+        List<ChatMessage> conversation = HarnessTestSetup.GetSnapshot(updates);
+        Assert.That(conversation[^1].Text, Is.EqualTo(kAnswer));
+        Assert.That(conversation[^1].Contents.OfType<FunctionCallContent>(), Is.Empty);
+        Assert.That(HarnessTestSetup.GetCallIds(conversation), Is.EqualTo(kAnsweredCallOnly));
+        await AssertNextTurnAcceptedAsync(agent, conversation, chatClient);
     }
 
     /// <summary>
-    /// Runs one more turn on the session and checks that the strict provider accepted all requests.
+    /// Runs one more turn with the given conversation and checks that the strict provider accepted all requests.
     /// </summary>
-    private static async Task AssertNextTurnAcceptedAsync(FwoUserAgent agent, AgentSession session, ScriptedChatClient chatClient)
+    private static async Task AssertNextTurnAcceptedAsync(FwoUserAgent agent, List<ChatMessage> conversation, ScriptedChatClient chatClient)
     {
         chatClient.Fallback = null;
         chatClient.RespondWithText(kNextAnswer);
-        AgentResponse nextResponse = await agent.RunAsync(kNextQuestion, session);
+        List<ChatMessage> nextMessages = [.. conversation, new ChatMessage(ChatRole.User, kNextQuestion)];
+        AgentResponse nextResponse = await agent.RunAsync(nextMessages);
         Assert.That(nextResponse.Text, Is.EqualTo(kNextAnswer));
         Assert.That(chatClient.Rejections, Is.Empty);
     }

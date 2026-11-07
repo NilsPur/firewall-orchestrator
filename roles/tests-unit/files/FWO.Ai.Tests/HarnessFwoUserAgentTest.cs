@@ -12,8 +12,9 @@ namespace FWO.Ai.Tests;
 
 /// <summary>
 /// Tests the turns of a user agent through the MCP server pipeline running on a test server: tool calls with the
-/// user's JWT and roles, failed and cancelled turns, streaming, the MCP prompts and the stored history.
-/// The AI provider is replaced by a <see cref="ScriptedChatClient"/>, strict where the stored history matters.
+/// user's JWT and roles, failed and cancelled turns, streaming, the MCP prompts, and the conversation a turn takes and
+/// returns, as the harness keeps none. The AI provider is replaced by a <see cref="ScriptedChatClient"/>, strict where
+/// the history matters.
 /// </summary>
 [TestFixture]
 internal class HarnessFwoUserAgentTest
@@ -34,37 +35,38 @@ internal class HarnessFwoUserAgentTest
     private static readonly List<ChatRole> kToolTurnRoles = [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant];
     private static readonly List<string> kQuestionAndAnswer = [kQuestion, kAnswer];
     private static readonly List<string> kSecondTurnRequest = [kQuestion, kAnswer, kNextQuestion];
+    private static readonly List<string> kSecondTurnOnly = [kNextQuestion];
     private static readonly List<ChatMessage> kNoMessages = [];
     private static readonly List<ChatMessage> kInstructionMessages = [new(ChatRole.User, kFirstInstruction), new(ChatRole.User, kSecondInstruction)];
     private static readonly List<ChatMessage> kBlankInstructionMessages = [new(ChatRole.User, " "), new(ChatRole.User, "")];
 
     /// <summary>
     /// Verifies that a tool call of the model runs on the MCP server with the user's JWT, its result reaches the model,
-    /// and the history keeps the whole exchange.
+    /// and the conversation the turn returns holds the whole exchange.
     /// </summary>
     [Test]
-    public async Task RunAsync_WithToolCall_RunsToolWithUsersTokenAndStoresExchange()
+    public async Task RunStreamingAsync_WithToolCall_RunsToolWithUsersTokenAndReturnsExchange()
     {
         await using WebApplication app = await McpTestServer.Start();
         ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }
             .RespondWithFunctionCall(kCallId, HarnessTestSetup.kCurrentUserTool).RespondWithText(kAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
 
-        AgentResponse response = await agent.RunAsync(kQuestion, session);
+        List<AgentResponseUpdate> updates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
 
-        Assert.That(response.Text, Is.EqualTo(kAnswer));
+        Assert.That(updates.ToAgentResponse().Text, Is.EqualTo(kAnswer));
         FunctionResultContent toolResult = HarnessTestSetup.GetContents<FunctionResultContent>(chatClient.ReceivedMessages[1]).Single();
         Assert.That(toolResult.CallId, Is.EqualTo(kCallId));
         string resultJson = JsonSerializer.Serialize(toolResult.Result);
         Assert.That(resultJson, Does.Contain(McpTestServer.kUserName));
         Assert.That(resultJson, Does.Contain(Roles.Reporter));
-        IReadOnlyList<ChatMessage> history = factory.GetHistory(session);
-        Assert.That(history.Select(message => message.Role), Is.EqualTo(kToolTurnRoles));
-        Assert.That(history[1].Contents.OfType<FunctionCallContent>().Single().Name, Is.EqualTo(HarnessTestSetup.kCurrentUserTool));
-        Assert.That(history[2].Contents.OfType<FunctionResultContent>().Single().CallId, Is.EqualTo(kCallId));
-        Assert.That(history[3].Text, Is.EqualTo(kAnswer));
+        List<ChatMessage> conversation = HarnessTestSetup.GetSnapshot(updates);
+        Assert.That(conversation.Select(message => message.Role), Is.EqualTo(kToolTurnRoles));
+        Assert.That(conversation[1].Contents.OfType<FunctionCallContent>().Single().Name, Is.EqualTo(HarnessTestSetup.kCurrentUserTool));
+        Assert.That(conversation[2].Contents.OfType<FunctionResultContent>().Single().CallId, Is.EqualTo(kCallId));
+        Assert.That(JsonSerializer.Serialize(conversation[2].Contents.OfType<FunctionResultContent>().Single().Result), Does.Contain(McpTestServer.kUserName));
+        Assert.That(conversation[3].Text, Is.EqualTo(kAnswer));
         Assert.That(chatClient.Rejections, Is.Empty);
     }
 
@@ -137,23 +139,21 @@ internal class HarnessFwoUserAgentTest
     }
 
     /// <summary>
-    /// Verifies that a session stored after one request is continued by the user agent of the next request, as the
-    /// sessions belong to the shared agent: the second run sends the first turn along.
+    /// Verifies that the user agent of the next request continues the conversation the previous turn returned, when it
+    /// is sent with the next question: the model gets the whole conversation.
     /// </summary>
     [Test]
-    public async Task RunAsync_NewUserAgentOnSerializedSession_ContinuesConversation()
+    public async Task RunAsync_WithConversationOfPreviousTurn_ContinuesConversation()
     {
         await using WebApplication app = await McpTestServer.Start();
         ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }.RespondWithText(kAnswer).RespondWithText(kNextAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent firstRequestAgent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await firstRequestAgent.CreateSessionAsync();
-        await firstRequestAgent.RunAsync(kQuestion, session);
-        JsonElement storedSession = await firstRequestAgent.SerializeSessionAsync(session);
+        List<AgentResponseUpdate> firstUpdates = await HarnessTestSetup.RunStreamingAsync(firstRequestAgent, kQuestion);
         FwoUserAgent nextRequestAgent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession restoredSession = await nextRequestAgent.DeserializeSessionAsync(storedSession);
+        List<ChatMessage> nextMessages = [.. HarnessTestSetup.GetSnapshot(firstUpdates), new ChatMessage(ChatRole.User, kNextQuestion)];
 
-        AgentResponse response = await nextRequestAgent.RunAsync(kNextQuestion, restoredSession);
+        AgentResponse response = await nextRequestAgent.RunAsync(nextMessages);
 
         Assert.That(response.Text, Is.EqualTo(kNextAnswer));
         Assert.That(nextRequestAgent.Name, Is.EqualTo(FwoAgentFactory.kAgentName));
@@ -162,57 +162,30 @@ internal class HarnessFwoUserAgentTest
     }
 
     /// <summary>
-    /// Verifies that the sessions keep separate histories.
+    /// Verifies that the agent keeps no history, also not in a session used for more than one turn: the next turn on
+    /// the session only sends what it is given.
     /// </summary>
     [Test]
-    public async Task RunAsync_OnDifferentSessions_KeepsHistoriesApart()
-    {
-        await using WebApplication app = await McpTestServer.Start();
-        ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }.RespondWithText(kAnswer).RespondWithText(kNextAnswer);
-        using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
-        FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession firstSession = await agent.CreateSessionAsync();
-        AgentSession secondSession = await agent.CreateSessionAsync();
-
-        await agent.RunAsync(kQuestion, firstSession);
-        await agent.RunAsync(kNextQuestion, secondSession);
-
-        Assert.That(chatClient.ReceivedMessages[1].Single().Text, Is.EqualTo(kNextQuestion));
-        Assert.That(HarnessTestSetup.GetTexts(factory.GetHistory(firstSession)), Is.EqualTo(kQuestionAndAnswer));
-        Assert.That(factory.GetHistory(secondSession), Has.Count.EqualTo(2));
-    }
-
-    /// <summary>
-    /// Verifies that the conversation a client sends again is ignored: only the new user message is sent along with
-    /// the stored history, and stored once.
-    /// </summary>
-    [Test]
-    public async Task RunAsync_WithConversationSentAgain_SendsOnlyNewUserMessage()
+    public async Task RunAsync_OnSameSession_KeepsNoHistory()
     {
         await using WebApplication app = await McpTestServer.Start();
         ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }.RespondWithText(kAnswer).RespondWithText(kNextAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
         AgentSession session = await agent.CreateSessionAsync();
+
         await agent.RunAsync(kQuestion, session);
-        List<ChatMessage> clientConversation =
-        [
-            new ChatMessage(ChatRole.User, kQuestion),
-            new ChatMessage(ChatRole.Assistant, kAnswer),
-            new ChatMessage(ChatRole.User, kNextQuestion)
-        ];
+        await agent.RunAsync(kNextQuestion, session);
 
-        await agent.RunAsync(clientConversation, session);
-
-        Assert.That(HarnessTestSetup.GetTexts(chatClient.ReceivedMessages[^1]), Is.EqualTo(kSecondTurnRequest));
-        Assert.That(factory.GetHistory(session), Has.Count.EqualTo(kQuestionAndAnswer.Count * 2));
+        Assert.That(HarnessTestSetup.GetTexts(chatClient.ReceivedMessages[1]), Is.EqualTo(kSecondTurnOnly));
     }
 
     /// <summary>
-    /// Verifies that a failing request leaves the stored history as it was before the turn, and the next turn works.
+    /// Verifies that a failing request fails the turn with the error of the provider, and that the next turn with the
+    /// same conversation works.
     /// </summary>
     [Test]
-    public async Task RunAsync_WhenProviderFails_KeepsHistoryAndRunsNextTurn()
+    public async Task RunAsync_WhenProviderFails_RunsNextTurnWithSameConversation()
     {
         await using WebApplication app = await McpTestServer.Start();
         ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }
@@ -221,26 +194,24 @@ internal class HarnessFwoUserAgentTest
             .RespondWithText(kNextAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
-        await agent.RunAsync(kQuestion, session);
-        List<ChatMessage> historyBeforeTurn = factory.GetHistory(session).ToList();
+        List<AgentResponseUpdate> firstUpdates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
+        List<ChatMessage> nextMessages = [.. HarnessTestSetup.GetSnapshot(firstUpdates), new ChatMessage(ChatRole.User, kNextQuestion)];
 
-        InvalidOperationException exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await agent.RunAsync(kNextQuestion, session))!;
+        InvalidOperationException exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await agent.RunAsync(nextMessages))!;
 
         Assert.That(exception.Message, Is.EqualTo(kProviderFailure));
-        Assert.That(factory.GetHistory(session), Is.EqualTo(historyBeforeTurn));
-        AgentResponse nextResponse = await agent.RunAsync(kNextQuestion, session);
+        AgentResponse nextResponse = await agent.RunAsync(nextMessages);
         Assert.That(nextResponse.Text, Is.EqualTo(kNextAnswer));
         Assert.That(HarnessTestSetup.GetTexts(chatClient.ReceivedMessages[^1]), Is.EqualTo(kSecondTurnRequest));
         Assert.That(chatClient.Rejections, Is.Empty);
     }
 
     /// <summary>
-    /// Verifies that a cancelled turn, here while a tool call is in progress, leaves the stored history as it was
-    /// before the turn, and the next turn works.
+    /// Verifies that a turn can be cancelled, here while a tool call is in progress, and that the next turn with the
+    /// same conversation works.
     /// </summary>
     [Test]
-    public async Task RunAsync_WhenCancelled_KeepsHistoryAndRunsNextTurn()
+    public async Task RunAsync_WhenCancelled_RunsNextTurnWithSameConversation()
     {
         await using WebApplication app = await McpTestServer.Start();
         BlockingAnswer blockingAnswer = new();
@@ -251,18 +222,16 @@ internal class HarnessFwoUserAgentTest
             .RespondWithText(kNextAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
-        await agent.RunAsync(kQuestion, session);
-        List<ChatMessage> historyBeforeTurn = factory.GetHistory(session).ToList();
+        List<AgentResponseUpdate> firstUpdates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
+        List<ChatMessage> nextMessages = [.. HarnessTestSetup.GetSnapshot(firstUpdates), new ChatMessage(ChatRole.User, kNextQuestion)];
         using CancellationTokenSource cancellation = new();
-        Task<AgentResponse> cancelledTurn = agent.RunAsync(kNextQuestion, session, cancellationToken: cancellation.Token);
+        Task<AgentResponse> cancelledTurn = agent.RunAsync(nextMessages, cancellationToken: cancellation.Token);
         await blockingAnswer.Started;
 
         await cancellation.CancelAsync();
 
         Assert.CatchAsync<OperationCanceledException>(async () => await cancelledTurn);
-        Assert.That(factory.GetHistory(session), Is.EqualTo(historyBeforeTurn));
-        AgentResponse nextResponse = await agent.RunAsync(kNextQuestion, session);
+        AgentResponse nextResponse = await agent.RunAsync(nextMessages);
         Assert.That(nextResponse.Text, Is.EqualTo(kNextAnswer));
         Assert.That(HarnessTestSetup.GetTexts(chatClient.ReceivedMessages[^1]), Is.EqualTo(kSecondTurnRequest));
         Assert.That(chatClient.Rejections, Is.Empty);
@@ -279,64 +248,56 @@ internal class HarnessFwoUserAgentTest
         ScriptedChatClient chatClient = new();
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
 
-        Assert.CatchAsync<ArgumentException>(async () => await agent.RunAsync(userMessage, session));
+        Assert.CatchAsync<ArgumentException>(async () => await agent.RunAsync(userMessage));
 
         Assert.That(chatClient.ReceivedMessages, Is.Empty);
-        Assert.That(factory.GetHistory(session), Is.Empty);
     }
 
     /// <summary>
-    /// Verifies that a streamed turn with a tool call returns the answer as updates and stores the same history as a
-    /// turn that is not streamed.
+    /// Verifies that the conversation a turn with a tool call returns is accepted by the provider as history of the
+    /// next turn, which sends the tool call and its result along.
     /// </summary>
     [Test]
-    public async Task RunStreamingAsync_WithToolCall_StoresExchange()
+    public async Task RunStreamingAsync_WithToolCall_ReturnsConversationNextTurnContinues()
     {
         await using WebApplication app = await McpTestServer.Start();
         ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }
             .RespondWithFunctionCall(kCallId, HarnessTestSetup.kCurrentUserTool).RespondWithText(kAnswer).RespondWithText(kNextAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
+        List<AgentResponseUpdate> updates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
+        List<ChatMessage> nextMessages = [.. HarnessTestSetup.GetSnapshot(updates), new ChatMessage(ChatRole.User, kNextQuestion)];
 
-        List<AgentResponseUpdate> updates = new();
-        await foreach (AgentResponseUpdate update in agent.RunStreamingAsync(kQuestion, session))
-        {
-            updates.Add(update);
-        }
+        AgentResponse nextResponse = await agent.RunAsync(nextMessages);
 
-        Assert.That(updates.ToAgentResponse().Text, Is.EqualTo(kAnswer));
-        Assert.That(factory.GetHistory(session).Select(message => message.Role), Is.EqualTo(kToolTurnRoles));
-        AgentResponse nextResponse = await agent.RunAsync(kNextQuestion, session);
         Assert.That(nextResponse.Text, Is.EqualTo(kNextAnswer));
+        Assert.That(HarnessTestSetup.GetResultCallIds(chatClient.ReceivedMessages[^1]), Has.Count.EqualTo(1));
         Assert.That(chatClient.Rejections, Is.Empty);
     }
 
     /// <summary>
     /// Verifies that the messages of a prompt the run names, with the arguments escaped by the MCP server, are sent
-    /// and stored as the user turn.
+    /// as the user turn and returned as part of the conversation.
     /// </summary>
     [Test]
-    public async Task RunAsync_WithPrompt_SendsAndStoresPromptAsUserTurn()
+    public async Task RunStreamingAsync_WithPrompt_SendsAndReturnsPromptAsUserTurn()
     {
         await using WebApplication app = await McpTestServer.Start();
         ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }.RespondWithText(kAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Requester);
-        AgentSession session = await agent.CreateSessionAsync();
         Dictionary<string, string> arguments = new() { [HarnessTestSetup.kReasonArgument] = kReasonWithMarkup };
 
-        AgentResponse response = await agent.RunAsync(kNoMessages, session,
-            HarnessTestSetup.CreatePromptRunOptions(HarnessTestSetup.kAccessRequestPrompt, arguments));
+        List<AgentResponseUpdate> updates = await HarnessTestSetup.RunStreamingAsync(agent, kNoMessages,
+            options: HarnessTestSetup.CreatePromptRunOptions(HarnessTestSetup.kAccessRequestPrompt, arguments));
 
-        Assert.That(response.Text, Is.EqualTo(kAnswer));
+        Assert.That(updates.ToAgentResponse().Text, Is.EqualTo(kAnswer));
         ChatMessage sentMessage = chatClient.ReceivedMessages.Single().Single();
         Assert.That(sentMessage.Role, Is.EqualTo(ChatRole.User));
         Assert.That(sentMessage.Text, Does.Contain(kEscapedReasonWithMarkup));
         Assert.That(sentMessage.Text, Does.Not.Contain(kReasonWithMarkup));
-        Assert.That(factory.GetHistory(session)[0].Text, Is.EqualTo(sentMessage.Text));
+        Assert.That(HarnessTestSetup.GetSnapshot(updates)[0].Text, Is.EqualTo(sentMessage.Text));
     }
 
     /// <summary>
@@ -387,42 +348,6 @@ internal class HarnessFwoUserAgentTest
             await agent.RunAsync(kNoMessages, options: HarnessTestSetup.CreatePromptRunOptions(McpTestPrompts.kEmptyPrompt)));
 
         Assert.That(chatClient.ReceivedMessages, Is.Empty);
-    }
-
-    /// <summary>
-    /// Verifies that the history of a new session is empty, and that the history returned is a copy that later turns
-    /// do not change.
-    /// </summary>
-    [Test]
-    public async Task GetHistory_ReturnsCopyOfStoredHistory()
-    {
-        await using WebApplication app = await McpTestServer.Start();
-        ScriptedChatClient chatClient = new ScriptedChatClient().RespondWithText(kAnswer).RespondWithText(kNextAnswer);
-        using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
-        FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
-        IReadOnlyList<ChatMessage> emptyHistory = factory.GetHistory(session);
-        await agent.RunAsync(kQuestion, session);
-        IReadOnlyList<ChatMessage> historyAfterFirstTurn = factory.GetHistory(session);
-
-        await agent.RunAsync(kNextQuestion, session);
-
-        Assert.That(emptyHistory, Is.Empty);
-        Assert.That(HarnessTestSetup.GetTexts(historyAfterFirstTurn), Is.EqualTo(kQuestionAndAnswer));
-        Assert.That(factory.GetHistory(session), Has.Count.EqualTo(kQuestionAndAnswer.Count * 2));
-        Assert.That(factory.GetHistory(session), Is.Not.SameAs(factory.GetHistory(session)));
-    }
-
-    /// <summary>
-    /// Verifies that a missing session is refused.
-    /// </summary>
-    [Test]
-    public async Task GetHistory_WithoutSession_Throws()
-    {
-        await using WebApplication app = await McpTestServer.Start();
-        using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, new ScriptedChatClient());
-
-        Assert.Throws<ArgumentNullException>(() => factory.GetHistory(null!));
     }
 
     /// <summary>

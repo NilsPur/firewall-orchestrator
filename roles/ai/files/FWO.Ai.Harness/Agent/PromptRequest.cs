@@ -74,7 +74,7 @@ internal sealed record PromptRequest(string Name, Dictionary<string, object?> Ar
     /// <summary>
     /// Reads the arguments of the prompt; MCP prompt arguments are strings.
     /// </summary>
-    /// <exception cref="ArgumentException">The arguments are no object, too many, not strings or too long.</exception>
+    /// <exception cref="ArgumentException">The arguments are no object, too many or not strings.</exception>
     private static Dictionary<string, object?> ReadArguments(JsonElement argumentsElement)
     {
         if (argumentsElement.ValueKind != JsonValueKind.Object)
@@ -93,12 +93,7 @@ internal sealed record PromptRequest(string Name, Dictionary<string, object?> Ar
             {
                 throw new ArgumentException("Every prompt argument must be a string.", nameof(argumentsElement));
             }
-            string value = argument.Value.GetString() ?? "";
-            if (value.Length > TurnInput.kMaxTextLength)
-            {
-                throw new ArgumentException($"A prompt argument must not be longer than {TurnInput.kMaxTextLength} characters.", nameof(argumentsElement));
-            }
-            arguments[argument.Name] = value;
+            arguments[argument.Name] = argument.Value.GetString() ?? "";
         }
         return arguments;
     }

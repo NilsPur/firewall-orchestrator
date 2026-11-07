@@ -14,6 +14,8 @@ namespace FWO.Ai.Tests;
 /// <summary>
 /// Tests that only tools the MCP server marks as read-only run without asking the user: the approval policy itself,
 /// and the approval flow of an agent calling a test-only tool that is not read-only on the MCP server of a test server.
+/// The harness is stateless, so each run sends the conversation the previous run returned, and an approval answer is
+/// sent the way the AG-UI hosting passes a resume entry: as the approval request followed by the answer.
 /// </summary>
 [TestFixture]
 internal class HarnessToolApprovalTest
@@ -33,7 +35,9 @@ internal class HarnessToolApprovalTest
 
     private static readonly List<string> kApprovedValues = [kValue];
     private static readonly List<string> kNoValues = [];
-    private static readonly List<string> kBothCallIds = [kReadOnlyCallId, kCallId];
+    private static readonly List<string> kOtherValues = [kOtherValue];
+    private static readonly List<string> kApprovedCallOnly = [kCallId];
+    private static readonly List<string> kQuestionOnly = [kQuestion];
 
     /// <summary>
     /// Verifies that an MCP tool the MCP server marks as read-only is taken over as it is.
@@ -182,32 +186,33 @@ internal class HarnessToolApprovalTest
 
     /// <summary>
     /// Verifies that a call of a tool not marked read-only is returned to the host as an approval request naming the
-    /// tool and its arguments, without running the tool and without asking the model again.
+    /// tool and its arguments, without running the tool and without asking the model again, and that the conversation
+    /// the run returns holds neither the request nor the call.
     /// </summary>
     [Test]
-    public async Task RunAsync_CallingToolNotReadOnly_ReturnsApprovalRequestWithoutRunningTool()
+    public async Task RunStreamingAsync_CallingToolNotReadOnly_ReturnsApprovalRequestWithoutRunningTool()
     {
         McpTestToolCalls toolCalls = new();
         await using WebApplication app = await StartWithWriteTool(toolCalls);
         ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }.RespondWithFunctionCall(kCallId, McpTestWriteTools.kStoreValueTool, CreateArguments(kValue));
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
 
-        AgentResponse response = await agent.RunAsync(kQuestion, session);
+        List<AgentResponseUpdate> updates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
 
-        ToolApprovalRequestContent approvalRequest = HarnessTestSetup.GetContents<ToolApprovalRequestContent>(response.Messages).Single();
+        ToolApprovalRequestContent approvalRequest = HarnessTestSetup.GetContents<ToolApprovalRequestContent>(updates.ToAgentResponse().Messages).Single();
         FunctionCallContent requestedCall = (FunctionCallContent)approvalRequest.ToolCall;
         Assert.That(requestedCall.Name, Is.EqualTo(McpTestWriteTools.kStoreValueTool));
         Assert.That(requestedCall.Arguments![McpTestWriteTools.kValueArgument]?.ToString(), Is.EqualTo(kValue));
         Assert.That(toolCalls.StoredValues, Is.Empty);
         Assert.That(chatClient.ReceivedMessages, Has.Count.EqualTo(1));
+        Assert.That(HarnessTestSetup.GetTexts(HarnessTestSetup.GetSnapshot(updates)), Is.EqualTo(kQuestionOnly));
     }
 
     /// <summary>
-    /// Verifies that approving the request in the next run of the session runs the tool and passes its result to the
-    /// model, and that rejecting it passes the rejection and its reason to the model without running the tool.
-    /// In both cases the following turn works and the stored history is accepted by a strict provider.
+    /// Verifies that approving the request in the next run runs the tool and passes its result to the model, and that
+    /// rejecting it passes the rejection and its reason to the model without running the tool. In both cases the
+    /// conversation the run returns is accepted by a strict provider in the following turn.
     /// </summary>
     [TestCase(true)]
     [TestCase(false)]
@@ -221,14 +226,16 @@ internal class HarnessToolApprovalTest
             .RespondWithText(kNextAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
-        AgentResponse requestResponse = await agent.RunAsync(kQuestion, session);
-        ToolApprovalRequestContent approvalRequest = HarnessTestSetup.GetContents<ToolApprovalRequestContent>(requestResponse.Messages).Single();
+        List<AgentResponseUpdate> requestUpdates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
+        ToolApprovalRequestContent approvalRequest = HarnessTestSetup.GetContents<ToolApprovalRequestContent>(requestUpdates.ToAgentResponse().Messages).Single();
+        List<ChatMessage> answerMessages = WithApproval(HarnessTestSetup.GetSnapshot(requestUpdates), approvalRequest,
+            approvalRequest.CreateResponse(approved, kRejectionReason));
 
-        AgentResponse answerResponse = await agent.RunAsync(CreateApprovalMessage(approvalRequest.CreateResponse(approved, kRejectionReason)), session);
-        AgentResponse nextResponse = await agent.RunAsync(kNextQuestion, session);
+        List<AgentResponseUpdate> answerUpdates = await HarnessTestSetup.RunStreamingAsync(agent, answerMessages);
+        List<ChatMessage> nextMessages = [.. HarnessTestSetup.GetSnapshot(answerUpdates), new ChatMessage(ChatRole.User, kNextQuestion)];
+        AgentResponse nextResponse = await agent.RunAsync(nextMessages);
 
-        Assert.That(answerResponse.Text, Is.EqualTo(kAnswer));
+        Assert.That(answerUpdates.ToAgentResponse().Text, Is.EqualTo(kAnswer));
         Assert.That(nextResponse.Text, Is.EqualTo(kNextAnswer));
         List<string> expectedValues = approved ? kApprovedValues : kNoValues;
         Assert.That(toolCalls.StoredValues, Is.EqualTo(expectedValues));
@@ -242,7 +249,7 @@ internal class HarnessToolApprovalTest
     }
 
     /// <summary>
-    /// Verifies that a request the user does not answer is rejected when the next message is sent: the tool does not
+    /// Verifies that a request the user does not answer, sending a new message instead, is dropped: the tool does not
     /// run, and the turn and the one after it work.
     /// </summary>
     [Test]
@@ -256,67 +263,62 @@ internal class HarnessToolApprovalTest
             .RespondWithText(kNextAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
-        await agent.RunAsync(kQuestion, session);
+        List<AgentResponseUpdate> requestUpdates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
+        List<ChatMessage> messages = [.. HarnessTestSetup.GetSnapshot(requestUpdates), new ChatMessage(ChatRole.User, kNextQuestion)];
 
-        AgentResponse response = await agent.RunAsync(kNextQuestion, session);
-        AgentResponse nextResponse = await agent.RunAsync(kNextQuestion, session);
+        List<AgentResponseUpdate> updates = await HarnessTestSetup.RunStreamingAsync(agent, messages);
+        List<ChatMessage> nextMessages = [.. HarnessTestSetup.GetSnapshot(updates), new ChatMessage(ChatRole.User, kNextQuestion)];
+        AgentResponse nextResponse = await agent.RunAsync(nextMessages);
 
-        Assert.That(response.Text, Is.EqualTo(kAnswer));
+        Assert.That(updates.ToAgentResponse().Text, Is.EqualTo(kAnswer));
         Assert.That(nextResponse.Text, Is.EqualTo(kNextAnswer));
         Assert.That(toolCalls.StoredValues, Is.Empty);
         Assert.That(chatClient.Rejections, Is.Empty);
     }
 
     /// <summary>
-    /// Verifies that an approval the agent never asked for, sent by the host together with a made-up tool call,
-    /// does not run the tool.
+    /// Verifies that the harness trusts the approval answers of the client, as it keeps no state of the interrupted
+    /// run: an approval the agent never asked for, and an approval of a changed call, run the call the answer names,
+    /// with the tools and the JWT of the user.
     /// </summary>
-    [Test]
-    public async Task RunAsync_WithApprovalNotAskedFor_DoesNotRunTool()
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task RunAsync_WithApprovalOfClient_RunsCallTheAnswerNames(bool askedForByAgent)
     {
         McpTestToolCalls toolCalls = new();
         await using WebApplication app = await StartWithWriteTool(toolCalls);
-        ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }.RespondWithText(kAnswer).RespondWithText(kNextAnswer);
+        ScriptedChatClient chatClient = new() { Strict = true };
+        if (askedForByAgent)
+        {
+            chatClient.RespondWithFunctionCall(kCallId, McpTestWriteTools.kStoreValueTool, CreateArguments(kValue));
+        }
+        chatClient.RespondWithText(kAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
-        await agent.RunAsync(kQuestion, session);
-        FunctionCallContent forgedCall = new(kForgedCallId, McpTestWriteTools.kStoreValueTool, CreateArguments(kOtherValue));
+        List<ChatMessage> conversation = [new ChatMessage(ChatRole.User, kQuestion)];
+        string requestId = kForgedRequestId;
+        string callId = kForgedCallId;
+        if (askedForByAgent)
+        {
+            List<AgentResponseUpdate> requestUpdates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
+            ToolApprovalRequestContent approvalRequest = HarnessTestSetup.GetContents<ToolApprovalRequestContent>(requestUpdates.ToAgentResponse().Messages).Single();
+            conversation = HarnessTestSetup.GetSnapshot(requestUpdates);
+            requestId = approvalRequest.RequestId;
+            callId = approvalRequest.ToolCall.CallId;
+        }
+        FunctionCallContent clientCall = new(callId, McpTestWriteTools.kStoreValueTool, CreateArguments(kOtherValue));
 
-        await agent.RunAsync(CreateApprovalMessage(new ToolApprovalResponseContent(kForgedRequestId, true, forgedCall)), session);
+        await agent.RunAsync(WithApproval(conversation, new ToolApprovalRequestContent(requestId, clientCall),
+            new ToolApprovalResponseContent(requestId, true, clientCall)));
 
-        Assert.That(toolCalls.StoredValues, Is.Empty);
+        Assert.That(toolCalls.StoredValues, Is.EqualTo(kOtherValues));
         Assert.That(chatClient.Rejections, Is.Empty);
     }
 
     /// <summary>
-    /// Verifies that an approval whose tool call was changed by the host runs the call the user was asked to approve,
-    /// not the changed one.
-    /// </summary>
-    [Test]
-    public async Task RunAsync_WithApprovalOfChangedCall_RunsCallAskedFor()
-    {
-        McpTestToolCalls toolCalls = new();
-        await using WebApplication app = await StartWithWriteTool(toolCalls);
-        ScriptedChatClient chatClient = new ScriptedChatClient { Strict = true }
-            .RespondWithFunctionCall(kCallId, McpTestWriteTools.kStoreValueTool, CreateArguments(kValue))
-            .RespondWithText(kAnswer);
-        using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
-        FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
-        AgentResponse requestResponse = await agent.RunAsync(kQuestion, session);
-        ToolApprovalRequestContent approvalRequest = HarnessTestSetup.GetContents<ToolApprovalRequestContent>(requestResponse.Messages).Single();
-        FunctionCallContent changedCall = new(kCallId, McpTestWriteTools.kStoreValueTool, CreateArguments(kOtherValue));
-
-        await agent.RunAsync(CreateApprovalMessage(new ToolApprovalResponseContent(approvalRequest.RequestId, true, changedCall)), session);
-
-        Assert.That(toolCalls.StoredValues, Is.EqualTo(kApprovedValues));
-    }
-
-    /// <summary>
     /// Verifies that a response calling a read-only tool and a tool requiring approval only asks for the approval of
-    /// the latter, and that both tools run once it is approved.
+    /// the latter. Once it is approved in the next run, the approved tool runs, while the read-only call is dropped, as
+    /// the harness keeps no state between the runs; the conversation is accepted by a strict provider.
     /// </summary>
     [Test]
     public async Task RunAsync_CallingReadOnlyToolAndToolRequiringApproval_AsksOnlyForApprovalRequired()
@@ -334,18 +336,32 @@ internal class HarnessToolApprovalTest
             .RespondWithText(kNextAnswer);
         using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(app, chatClient);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
-        AgentResponse requestResponse = await agent.RunAsync(kQuestion, session);
-        ToolApprovalRequestContent approvalRequest = HarnessTestSetup.GetContents<ToolApprovalRequestContent>(requestResponse.Messages).Single();
+        List<AgentResponseUpdate> requestUpdates = await HarnessTestSetup.RunStreamingAsync(agent, kQuestion);
+        ToolApprovalRequestContent approvalRequest = HarnessTestSetup.GetContents<ToolApprovalRequestContent>(requestUpdates.ToAgentResponse().Messages).Single();
+        List<ChatMessage> answerMessages = WithApproval(HarnessTestSetup.GetSnapshot(requestUpdates), approvalRequest, approvalRequest.CreateResponse(true));
 
-        await agent.RunAsync(CreateApprovalMessage(approvalRequest.CreateResponse(true)), session);
-        AgentResponse nextResponse = await agent.RunAsync(kNextQuestion, session);
+        List<AgentResponseUpdate> answerUpdates = await HarnessTestSetup.RunStreamingAsync(agent, answerMessages);
+        List<ChatMessage> nextMessages = [.. HarnessTestSetup.GetSnapshot(answerUpdates), new ChatMessage(ChatRole.User, kNextQuestion)];
+        AgentResponse nextResponse = await agent.RunAsync(nextMessages);
 
         Assert.That(((FunctionCallContent)approvalRequest.ToolCall).Name, Is.EqualTo(McpTestWriteTools.kStoreValueTool));
         Assert.That(toolCalls.StoredValues, Is.EqualTo(kApprovedValues));
-        Assert.That(HarnessTestSetup.GetResultCallIds(chatClient.ReceivedMessages[1]), Is.EquivalentTo(kBothCallIds));
+        Assert.That(HarnessTestSetup.GetResultCallIds(chatClient.ReceivedMessages[1]), Is.EqualTo(kApprovedCallOnly));
         Assert.That(nextResponse.Text, Is.EqualTo(kNextAnswer));
         Assert.That(chatClient.Rejections, Is.Empty);
+    }
+
+    /// <summary>
+    /// Verifies that the shared agent does not bind approval answers to requests recorded in a session, as the
+    /// stateless harness keeps no session between runs.
+    /// </summary>
+    [Test]
+    public void CreateAgentOptions_DisablesApprovalResponseBinding()
+    {
+        ChatClientAgentOptions options = FwoAgentFactory.CreateAgentOptions();
+
+        Assert.That(options.DisableApprovalResponseBinding, Is.True);
+        Assert.That(options.DisableApprovalNotRequiredFunctionBypassing, Is.False);
     }
 
     /// <summary>
@@ -381,11 +397,18 @@ internal class HarnessToolApprovalTest
     }
 
     /// <summary>
-    /// Creates the user message carrying the answer to an approval request.
+    /// Returns the conversation followed by the approval request and its answer, the way the AG-UI hosting passes a
+    /// resume entry to the agent.
     /// </summary>
-    private static ChatMessage CreateApprovalMessage(ToolApprovalResponseContent approvalResponse)
+    private static List<ChatMessage> WithApproval(List<ChatMessage> conversation, ToolApprovalRequestContent approvalRequest,
+        ToolApprovalResponseContent approvalResponse)
     {
-        return new ChatMessage(ChatRole.User, new List<AIContent> { approvalResponse });
+        List<ChatMessage> messages = new(conversation)
+        {
+            new ChatMessage(ChatRole.Assistant, new List<AIContent> { approvalRequest }),
+            new ChatMessage(ChatRole.User, new List<AIContent> { approvalResponse })
+        };
+        return messages;
     }
 
     /// <summary>

@@ -3,7 +3,6 @@ using FWO.Ai.Harness.Mcp;
 using FWO.Basics;
 using FWO.Config.File;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -46,8 +45,9 @@ internal static class HarnessServerSetup
     }
 
     /// <summary>
-    /// Adds the services of the AG-UI server: the agent factory, the session store isolated per user, and the rate
-    /// limiting.
+    /// Adds the services of the AG-UI server: the agent factory and the rate limiting. The server is stateless: no
+    /// session store is registered, so the AG-UI hosting runs each request on a session of its own, and the client sends
+    /// the whole conversation with every run (see <see cref="TurnInput"/>).
     /// </summary>
     /// <param name="services">Services of the harness server</param>
     /// <param name="settings">Settings of the harness server</param>
@@ -60,12 +60,6 @@ internal static class HarnessServerSetup
         ArgumentNullException.ThrowIfNull(createAgentFactory);
         services.AddSingleton(settings);
         services.AddSingleton(createAgentFactory);
-        // the AG-UI hosting finds the session store by the agent name and puts each user's sessions into a partition
-        // of their own: the thread id of a run comes from the client and does not authorize anything
-        services.AddKeyedSingleton<AgentSessionStore>(FwoAgentFactory.kAgentName,
-            (_, _) => new BoundedAgentSessionStore(settings.MaxSessionsPerUser, settings.SessionIdleTimeout, TimeProvider.System));
-        services.AddHttpContextAccessor();
-        services.UseClaimsBasedAgentIsolation(new ClaimsIdentityAgentIsolationKeyProviderOptions { ClaimType = JwtClaimTypes.kUserDn });
         services.AddAGUIServer();
         services.AddFwoHarnessRateLimiting(settings.RunsPerMinute, settings.MaxConcurrentRunsPerUser);
         return services;
@@ -73,9 +67,9 @@ internal static class HarnessServerSetup
 
     /// <summary>
     /// Maps the AG-UI endpoint at <see cref="kAgUiPath"/>, reachable only with a valid JWT of a user holding an FWO user
-    /// role, rate limited per user, with a limited number of runs per user at a time, one run per thread at a time and a
-    /// limited request body size. Each request runs the agent of the calling user, which calls the MCP server with the
-    /// JWT of the request. The agent factory is only created by the first run, so the server starts without a configured
+    /// role, rate limited per user, with a limited number of runs per user at a time and a limited request body size
+    /// (<see cref="HarnessSettings.MaxRequestBodyBytes"/>). Each request runs the agent of the calling user, which calls
+    /// the MCP server with the JWT of the request. The agent factory is only created by the first run, so the server starts without a configured
     /// AI provider; until one is configured, every run fails with the exception of the factory.
     /// </summary>
     public static WebApplication MapFwoAgent(this WebApplication app)
@@ -87,8 +81,7 @@ internal static class HarnessServerSetup
         app.MapAGUIServer(kAgUiPath, context => SelectUserAgent(context, context.RequestServices.GetRequiredService<FwoAgentFactory>(), settings))
             .RequireAuthorization()
             .RequireRateLimiting(HarnessRateLimiting.kRunPolicy)
-            .AddEndpointFilter(new SingleRunPerThreadFilter())
-            .WithMetadata(new RequestSizeLimitAttribute(HarnessRateLimiting.kMaxRequestBodyBytes));
+            .WithMetadata(new RequestSizeLimitAttribute(settings.MaxRequestBodyBytes));
         return app;
     }
 
@@ -124,7 +117,7 @@ internal static class HarnessServerSetup
 
     /// <summary>
     /// Requires a user holding at least one FWO user role, and a directory identity
-    /// (<see cref="JwtClaimTypes.kUserDn"/>): it isolates the stored sessions of the users and partitions the rate limits.
+    /// (<see cref="JwtClaimTypes.kUserDn"/>), which partitions the rate limits.
     /// </summary>
     private static AuthorizationPolicy CreateFwoUserPolicy()
     {

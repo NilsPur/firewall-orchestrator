@@ -338,6 +338,13 @@ namespace FWO.Config.Api.Data
         [JsonProperty("allowServiceInConn"), JsonPropertyName("allowServiceInConn")]
         public bool AllowServiceInConn { get; set; } = true;
 
+        /// <summary>
+        /// Whether modellers can let the AI assistant check the functional reason of a connection or interface.
+        /// Needs the AI server with a configured AI provider.
+        /// </summary>
+        [JsonProperty("modAiReasonCheck"), JsonPropertyName("modAiReasonCheck")]
+        public bool ModAiReasonCheck { get; set; } = false;
+
         [JsonProperty("overviewDisplayLines"), JsonPropertyName("overviewDisplayLines")]
         public int OverviewDisplayLines { get; set; } = 3;
 

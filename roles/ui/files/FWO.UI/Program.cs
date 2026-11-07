@@ -1,4 +1,5 @@
 using BlazorTable;
+using FWO.Ai.Client;
 using FWO.Api.Client;
 using FWO.Config.Api;
 using FWO.Config.File;
@@ -64,7 +65,10 @@ builder.Services.AddScoped<MiddlewareClient>(_ => new MiddlewareClient(Middlewar
 builder.Services.AddScoped<ISessionStorage, SessionStorage>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<UiSessionRestorer>();
+builder.Services.AddScoped<IAccessTokenSource>(serviceProvider => new SessionAccessTokenSource(
+    serviceProvider.GetRequiredService<TokenService>(), serviceProvider.GetRequiredService<UiSessionRestorer>().RestoreAsync));
 builder.Services.AddScoped<ITokenRefreshCoordinator, TokenRefreshCoordinator>();
+builder.Services.AddSingleton<IFwoAgentChatClientFactory>(_ => new FwoAgentChatClientFactory(new Uri(MiddlewareUri)));
 builder.Services.AddSingleton<IPeriodicTaskRunnerFactory, PeriodicTaskRunnerFactory>();
 builder.Services.AddScoped<ExecutionModeStorage>();
 builder.Services.AddSingleton<IInternalCaCertificateProvider, InternalCaCertificateProvider>();

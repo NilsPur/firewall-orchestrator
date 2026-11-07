@@ -17,9 +17,8 @@ internal class HarnessSettingsTest
     private const string kLoopbackMcpEndpoint = "http://127.0.0.1:9999/mcp";
     private const string kRemoteHttpMcpEndpoint = "http://middleware.example.com/mcp";
     private const string kConnectionTimeout = "00:00:30";
-    private const string kIdleTimeout = "01:00:00";
     private const int kRunsPerMinute = 5;
-    private const int kMaxSessionsPerUser = 3;
+    private const long kMaxRequestBodyBytes = 1024L * 1024;
     private const int kMaxConcurrentRunsPerUser = 2;
     private const int kContextWindowTokens = 200000;
     private const int kMaxIterationsPerRequest = 7;
@@ -29,11 +28,9 @@ internal class HarnessSettingsTest
         new TestCaseData("McpEndpoint", kRemoteHttpMcpEndpoint).SetName("RemoteHttpMcpEndpoint"),
         new TestCaseData("McpConnectionTimeout", "00:00:00").SetName("NoConnectionTimeout"),
         new TestCaseData("RunsPerMinute", "0").SetName("NoRuns"),
-        new TestCaseData("MaxSessionsPerUser", "0").SetName("NoSessions"),
         new TestCaseData("MaxConcurrentRunsPerUser", "0").SetName("NoConcurrentRuns"),
-        new TestCaseData("MaxConcurrentRunsPerUser", (HarnessSettings.kDefaultMaxSessionsPerUser + 1).ToString()).SetName("MoreConcurrentRunsThanSessions"),
-        new TestCaseData("SessionIdleTimeout", "00:00:00").SetName("NoIdleTimeout"),
-        new TestCaseData("SessionIdleTimeout", "-01:00:00").SetName("NegativeIdleTimeout")
+        new TestCaseData("MaxRequestBodyBytes", "0").SetName("NoRequestBody"),
+        new TestCaseData("MaxRequestBodyBytes", (HarnessSettings.kMaxRequestBodyBytesLimit + 1).ToString()).SetName("RequestBodyBeyondLimit")
     ];
 
     /// <summary>
@@ -48,9 +45,8 @@ internal class HarnessSettingsTest
         Assert.That(settings.McpEndpoint, Is.EqualTo(new Uri(HarnessSettings.kDefaultMcpEndpoint)));
         Assert.That(settings.McpConnectionTimeout, Is.Null);
         Assert.That(settings.RunsPerMinute, Is.EqualTo(HarnessSettings.kDefaultRunsPerMinute));
-        Assert.That(settings.MaxSessionsPerUser, Is.EqualTo(HarnessSettings.kDefaultMaxSessionsPerUser));
         Assert.That(settings.MaxConcurrentRunsPerUser, Is.EqualTo(HarnessSettings.kDefaultMaxConcurrentRunsPerUser));
-        Assert.That(settings.SessionIdleTimeout, Is.EqualTo(HarnessSettings.kDefaultSessionIdleTimeout));
+        Assert.That(settings.MaxRequestBodyBytes, Is.EqualTo(HarnessSettings.kDefaultMaxRequestBodyBytes));
         Assert.That(settings.Provider.Model, Is.Empty);
     }
 
@@ -66,9 +62,8 @@ internal class HarnessSettingsTest
             ["Harness:McpEndpoint"] = kLoopbackMcpEndpoint,
             ["Harness:McpConnectionTimeout"] = kConnectionTimeout,
             ["Harness:RunsPerMinute"] = kRunsPerMinute.ToString(),
-            ["Harness:MaxSessionsPerUser"] = kMaxSessionsPerUser.ToString(),
             ["Harness:MaxConcurrentRunsPerUser"] = kMaxConcurrentRunsPerUser.ToString(),
-            ["Harness:SessionIdleTimeout"] = kIdleTimeout,
+            ["Harness:MaxRequestBodyBytes"] = kMaxRequestBodyBytes.ToString(),
             ["Harness:Provider:Provider"] = nameof(AiProvider.Anthropic),
             ["Harness:Provider:Model"] = kModel,
             ["Harness:Provider:ApiKey"] = kApiKey,
@@ -81,9 +76,8 @@ internal class HarnessSettingsTest
         Assert.That(settings.McpEndpoint, Is.EqualTo(new Uri(kLoopbackMcpEndpoint)));
         Assert.That(settings.McpConnectionTimeout, Is.EqualTo(TimeSpan.Parse(kConnectionTimeout)));
         Assert.That(settings.RunsPerMinute, Is.EqualTo(kRunsPerMinute));
-        Assert.That(settings.MaxSessionsPerUser, Is.EqualTo(kMaxSessionsPerUser));
         Assert.That(settings.MaxConcurrentRunsPerUser, Is.EqualTo(kMaxConcurrentRunsPerUser));
-        Assert.That(settings.SessionIdleTimeout, Is.EqualTo(TimeSpan.Parse(kIdleTimeout)));
+        Assert.That(settings.MaxRequestBodyBytes, Is.EqualTo(kMaxRequestBodyBytes));
         Assert.That(settings.Provider.Provider, Is.EqualTo(AiProvider.Anthropic));
         Assert.That(settings.Provider.Model, Is.EqualTo(kModel));
         Assert.That(settings.Provider.ApiKey, Is.EqualTo(kApiKey));

@@ -9,7 +9,7 @@ using NUnit.Framework;
 namespace FWO.Ai.Tests;
 
 /// <summary>
-/// Tests the compaction of the stored history, directly on the reducer and through an agent. The token count is
+/// Tests the compaction of the conversation of a run, directly on the reducer and through an agent. The token count is
 /// estimated as UTF-8 bytes / 4 per message group, so every message of the tests is built from
 /// <see cref="kMessageCharacters"/> ASCII characters, i.e. <see cref="kMessageTokens"/> tokens.
 /// </summary>
@@ -235,9 +235,10 @@ internal class HarnessHistoryCompactionTest
     }
 
     /// <summary>
-    /// Verifies through an agent that a history growing beyond the threshold is compacted before the next turn: the
-    /// summarizer is the plain provider client (no tools, no instructions), the turn starts with the summary as user
-    /// message followed by the 4 most recent messages and the new one, and a strict provider accepts all requests.
+    /// Verifies through an agent that a conversation growing beyond the threshold is compacted before the next turn:
+    /// the summarizer is the plain provider client (no tools, no instructions), the turn starts with the summary as user
+    /// message followed by the 4 most recent messages and the new one, the conversation the turn returns is the
+    /// compacted one, and a strict provider accepts all requests.
     /// </summary>
     [Test]
     public async Task RunAsync_WithLongHistory_CompactsBeforeNextTurn()
@@ -247,9 +248,8 @@ internal class HarnessHistoryCompactionTest
         AgentSettings agentSettings = new();
         using FwoAgentFactory factory = CreateFactory(app, chatClient, agentSettings);
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
 
-        await RunTurnsAsync(agent, session, kAgentTurns);
+        List<ChatMessage> conversation = await RunTurnsAsync(agent, kAgentTurns);
 
         List<int> summarizationIndexes = GetSummarizationRequestIndexes(chatClient);
         int summarizationIndex = summarizationIndexes.Single();
@@ -259,9 +259,8 @@ internal class HarnessHistoryCompactionTest
         AssertSummary(lastTurnRequest[0], kSummary);
         Assert.That(lastTurnRequest, Has.Count.EqualTo(kPreservedRecentGroups + 2));
         Assert.That(lastTurnRequest[^1].Text, Is.EqualTo(CreateText(kUserLabel + kAgentTurns)));
-        IReadOnlyList<ChatMessage> history = factory.GetHistory(session);
-        AssertSummary(history[0], kSummary);
-        Assert.That(history, Has.Count.EqualTo(kPreservedRecentGroups + 3));
+        AssertSummary(conversation[0], kSummary);
+        Assert.That(conversation, Has.Count.EqualTo(kPreservedRecentGroups + 3));
         Assert.That(chatClient.Rejections, Is.Empty);
     }
 
@@ -276,17 +275,16 @@ internal class HarnessHistoryCompactionTest
         ScriptedChatClient chatClient = CreateAnsweringClient();
         using FwoAgentFactory factory = CreateFactory(app, chatClient, new AgentSettings { CompactionReserveTokens = kLargeReserveTokens });
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
 
-        await RunTurnsAsync(agent, session, kTurnsBelowLargeReserve + 1);
+        await RunTurnsAsync(agent, kTurnsBelowLargeReserve + 1);
 
         Assert.That(GetSummarizationRequestIndexes(chatClient), Has.Count.EqualTo(1));
         AssertSummary(chatClient.ReceivedMessages[^1][0], kSummary);
     }
 
     /// <summary>
-    /// Verifies through an agent that a failing summarizer leaves the stored history unchanged and the turn runs with
-    /// the full history.
+    /// Verifies through an agent that a failing summarizer leaves the conversation uncompacted and the turn runs with
+    /// the full conversation.
     /// </summary>
     [Test]
     public async Task RunAsync_WhenSummarizerFails_RunsTurnWithFullHistory()
@@ -295,12 +293,11 @@ internal class HarnessHistoryCompactionTest
         ScriptedChatClient chatClient = CreateAnsweringClient(summarizerFails: true);
         using FwoAgentFactory factory = CreateFactory(app, chatClient, new AgentSettings());
         FwoUserAgent agent = HarnessTestSetup.CreateUserAgent(factory, Roles.Reporter);
-        AgentSession session = await agent.CreateSessionAsync();
 
-        await RunTurnsAsync(agent, session, kAgentTurns);
+        List<ChatMessage> conversation = await RunTurnsAsync(agent, kAgentTurns);
 
         Assert.That(GetSummarizationRequestIndexes(chatClient), Has.Count.EqualTo(1));
-        Assert.That(factory.GetHistory(session), Has.Count.EqualTo(kAgentTurns * 2));
+        Assert.That(conversation, Has.Count.EqualTo(kAgentTurns * 2));
         Assert.That(chatClient.ReceivedMessages[^1], Has.Count.EqualTo(kAgentTurns * 2 - 1));
     }
 
@@ -313,14 +310,19 @@ internal class HarnessHistoryCompactionTest
     }
 
     /// <summary>
-    /// Runs the given number of turns with user messages of the test size.
+    /// Runs the given number of turns with user messages of the test size, each sending the conversation the turn
+    /// before returned, and returns the conversation of the last turn.
     /// </summary>
-    private static async Task RunTurnsAsync(FwoUserAgent agent, AgentSession session, int turnCount)
+    private static async Task<List<ChatMessage>> RunTurnsAsync(FwoUserAgent agent, int turnCount)
     {
+        List<ChatMessage> conversation = new();
         for (int turn = 1; turn <= turnCount; turn++)
         {
-            await agent.RunAsync(CreateText(kUserLabel + turn), session);
+            List<ChatMessage> messages = [.. conversation, new ChatMessage(ChatRole.User, CreateText(kUserLabel + turn))];
+            List<AgentResponseUpdate> updates = await HarnessTestSetup.RunStreamingAsync(agent, messages);
+            conversation = HarnessTestSetup.GetSnapshot(updates);
         }
+        return conversation;
     }
 
     /// <summary>

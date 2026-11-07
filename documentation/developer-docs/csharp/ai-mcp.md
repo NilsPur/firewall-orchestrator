@@ -74,21 +74,40 @@ as instructions to its AI provider; keep `AgentPrompts.kAgentInstructionsPromptN
 `FwoUserAgent.kInstructionsPromptName` of the harness.
 
 The other prompts (`RequestApplicationPrompts`) check whether the justification of a requested firewall change is a
-genuine one. They return the instructions for the model, with the arguments embedded as data; the model answers with
-a verdict (`GENUINE`, `INSUFFICIENT` or `NOT_GENUINE`), one line per criterion, questions to the requester and an
-improved justification.
+genuine one. They return the instructions for the model, with the arguments embedded as data. The FWO UI runs
+`check_connection_reason` through the AI harness with the [AI client](ai-client.md), shows the answer as text and reads
+the verdict from it.
 
 | Prompt | Arguments |
 |---|---|
-| `check_access_request_reason` | `reason` (required), `title`, `source`, `destination`, `service` |
-| `check_connection_reason` | `reason` (required), `kind` (`connection`, `interface` or `interface_usage`, default `connection`), `name`, `app`, `source`, `destination`, `service` |
+| `check_access_request_reason` | `reason` (required), `title`, `source`, `destination`, `service`, `language` |
+| `check_connection_reason` | `reason` (required), `kind` (`connection`, `interface` or `interface_usage`, default `connection`), `name`, `app`, `source`, `destination`, `service`, `language` |
+
+The answer is plain text without Markdown or other markup (no `**`, `#`, tables or code blocks), so that clients can
+show it as it is:
+
+- The first line is `Verdict: GENUINE`, `Verdict: INSUFFICIENT` or `Verdict: NOT_GENUINE`. The heading and the verdict
+  word are in English whatever the language of the answer, so that clients can read the verdict
+  (`ReasonVerdictParser` of the AI client).
+- Then the sections Criteria (one line per criterion), Questions to the requester and Improved justification, each
+  starting with its heading on a line of its own. The questions and the improved justification are left out for
+  `GENUINE`.
+- The answer, including the headings of the sections, is in the language given by `language`, e.g. `English` or
+  `German`, and in the language of the justification if none is given. The improved justification is always in the
+  language of the justification.
 
 - The arguments are entered by the requester and are untrusted. Each one is embedded as a data block tagged with its
   name, with `&`, `<` and `>` escaped, so that it cannot close its block and pass itself off as instructions. The
   instructions tell the model never to follow instructions in the data.
-- `reason` may have at most 4000 characters, every other argument at most 2000. A longer argument or an unknown `kind`
+- `language` is the exception: it is chosen by the client (e.g. the UI language of the user), and it is embedded into
+  the instructions. It is therefore only accepted as a language name of letters, spaces and hyphens starting with a
+  letter, of at most 32 characters (`kLanguagePattern`, `kMaxLanguageLength`); anything else is refused with an MCP
+  error, so that it can carry neither markup nor punctuation.
+- `reason` may have at most 4000 characters, every other argument at most 10000. A longer argument or an unknown `kind`
   is refused with an MCP error.
 - Arguments that are not given are left out.
+- Keep the prompt names, argument names, limits and the language pattern in step with `ConnectionReasonCheck` and
+  `ReasonCheckLimits` of the AI client (`ClientConformanceTest`).
 
 ## Limits
 
@@ -152,7 +171,9 @@ server with a key pair of its own, and creates tokens like the middleware does:
 - `McpReverseProxyTest`: the path Apache publishes and the forwarded headers.
 - `McpUserToolsTest`: `get_current_user` without an authenticated request, and the read-only annotation.
 - `McpRequestApplicationPromptsTest`: the justification prompts, directly and through the MCP endpoint, including
-  escaping and length limits.
+  escaping, length limits, the answer format, and the language of the answer with the refusal of invalid languages.
+- `ClientConformanceTest`: that the prompt name, arguments, kinds, limits and language pattern of the AI client are
+  the ones of the MCP server.
 - `McpAgentPromptsTest`: the agent instructions prompt, directly and through the MCP endpoint, and that the harness asks
   for it by its name.
 

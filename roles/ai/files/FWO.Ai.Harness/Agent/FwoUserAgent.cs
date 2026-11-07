@@ -10,10 +10,10 @@ namespace FWO.Ai.Harness.Agent;
 /// <summary>
 /// Agent of one FWO user for one request, created by <see cref="FwoAgentFactory.CreateUserAgent"/>. Each run
 /// connects to the MCP server with the user's JWT, gets the instructions from it, offers the model the tools this user
-/// may call for this run only, and closes the connection when the run ends. The run takes only the new input of the
-/// user, see <see cref="TurnInput"/>. The sessions and their history belong to the agent shared by all users, so a
-/// session stored after one request is continued by the user agent of the next. A tool not marked read-only runs only
-/// once its <see cref="ToolApprovalRequestContent"/> has been answered.
+/// may call for this run only, and closes the connection when the run ends. The harness is stateless: a run takes the
+/// conversation the client sends (see <see cref="TurnInput"/>), compacts its history once it exceeds the context
+/// window, and ends with the conversation for the next run (see <see cref="ConversationSnapshot"/>). A tool not marked read-only
+/// runs only once its <see cref="ToolApprovalRequestContent"/> has been answered.
 /// </summary>
 public sealed class FwoUserAgent : DelegatingAIAgent
 {
@@ -23,6 +23,7 @@ public sealed class FwoUserAgent : DelegatingAIAgent
     /// </summary>
     internal const string kInstructionsPromptName = "fwo_agent_instructions";
 
+    private readonly IChatReducer historyReducer;
     private readonly McpConnectionSettings userConnection;
     private readonly Func<HttpMessageHandler>? mcpHandlerFactory;
     private readonly ILoggerFactory? loggerFactory;
@@ -31,15 +32,17 @@ public sealed class FwoUserAgent : DelegatingAIAgent
     /// <summary>
     /// Creates the user agent, see <see cref="FwoAgentFactory.CreateUserAgent"/>.
     /// </summary>
-    /// <param name="sharedAgent">Agent shared by all users, running the turns and holding the history</param>
+    /// <param name="sharedAgent">Agent shared by all users, running the turns; it keeps no history</param>
+    /// <param name="historyReducer">Compacts the history of a run, see <see cref="HistoryCompaction"/></param>
     /// <param name="userConnection">MCP endpoint and the provider of the user's JWT</param>
     /// <param name="mcpHandlerFactory">Creates the handler sending the MCP requests of a run, e.g. of a test server;
     /// a new <see cref="SocketsHttpHandler"/> per run if null</param>
     /// <param name="loggerFactory">Logger factory of the MCP clients and of failed runs</param>
-    internal FwoUserAgent(AIAgent sharedAgent, McpConnectionSettings userConnection, Func<HttpMessageHandler>? mcpHandlerFactory,
-        ILoggerFactory? loggerFactory)
+    internal FwoUserAgent(AIAgent sharedAgent, IChatReducer historyReducer, McpConnectionSettings userConnection,
+        Func<HttpMessageHandler>? mcpHandlerFactory, ILoggerFactory? loggerFactory)
         : base(sharedAgent)
     {
+        this.historyReducer = historyReducer;
         this.userConnection = userConnection;
         this.mcpHandlerFactory = mcpHandlerFactory;
         this.loggerFactory = loggerFactory;
@@ -57,8 +60,9 @@ public sealed class FwoUserAgent : DelegatingAIAgent
 
     /// <summary>
     /// Runs a streaming turn with the tools of the user. The run options are not passed on: the agent only takes the
-    /// new user input from them and offers the user's tools, so neither the AG-UI input nor options of the client
-    /// reach the AI provider. A failed run is logged, as the AG-UI hosting reports it to the client without details.
+    /// conversation and the prompt from them and offers the user's tools, so neither the AG-UI input nor options of the
+    /// client reach the AI provider. The last update holds the snapshot of the conversation. A failed run is logged, as
+    /// the AG-UI hosting reports it to the client without details.
     /// </summary>
     /// <exception cref="ArgumentException">The run has no valid new user input, see <see cref="TurnInput.Read"/>.</exception>
     /// <exception cref="NotSupportedException">The AG-UI input declares client tools.</exception>
@@ -74,8 +78,9 @@ public sealed class FwoUserAgent : DelegatingAIAgent
     }
 
     /// <summary>
-    /// Reads the turn input, connects to the MCP server, loads the user's tools and the instructions, and runs the turn
-    /// on the shared agent.
+    /// Reads the turn input, connects to the MCP server, loads the user's tools and the instructions, compacts the
+    /// history if needed, runs the turn on the shared agent with the history and the new input, and returns the
+    /// conversation for the next run.
     /// </summary>
     private async IAsyncEnumerable<AgentResponseUpdate> RunTurnAsync(IEnumerable<ChatMessage> messages, AgentSession? session,
         AgentRunOptions? options, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -83,15 +88,20 @@ public sealed class FwoUserAgent : DelegatingAIAgent
         TurnInput turnInput = TurnInput.Read(messages, options);
         await using FwoMcpConnection mcpConnection = await FwoMcpConnection.ConnectAsync(userConnection, mcpHandlerFactory?.Invoke(),
             loggerFactory, cancellationToken);
-        List<ChatMessage> turnMessages = await turnInput.GetMessagesAsync(mcpConnection, cancellationToken);
+        List<ChatMessage> newMessages = await turnInput.GetNewMessagesAsync(mcpConnection, cancellationToken);
+        List<ChatMessage> runMessages = (await historyReducer.ReduceAsync(turnInput.History, cancellationToken)).ToList();
+        runMessages.AddRange(newMessages);
         List<AITool> mcpTools = await mcpConnection.ListToolsAsync(cancellationToken);
         List<ChatMessage> instructionMessages = await mcpConnection.GetPromptMessagesAsync(kInstructionsPromptName, cancellationToken: cancellationToken);
         ChatClientAgentRunOptions runOptions = CreateRunOptions(ToolApproval.RequireApprovalUnlessReadOnly(mcpTools),
             JoinInstructions(instructionMessages));
-        await foreach (AgentResponseUpdate update in InnerAgent.RunStreamingAsync(turnMessages, session, runOptions, cancellationToken))
+        List<AgentResponseUpdate> responseUpdates = new();
+        await foreach (AgentResponseUpdate update in InnerAgent.RunStreamingAsync(runMessages, session, runOptions, cancellationToken))
         {
+            responseUpdates.Add(update);
             yield return update;
         }
+        yield return ConversationSnapshot.Create(runMessages, responseUpdates);
     }
 
     /// <summary>
@@ -122,7 +132,7 @@ public sealed class FwoUserAgent : DelegatingAIAgent
 
     /// <summary>
     /// Creates the options of a run with the given instructions, offering the given tools if there are any. The
-    /// instructions are sent with every request of the run and are not stored in the history.
+    /// instructions are sent with every request of the run and are not part of the conversation.
     /// </summary>
     private static ChatClientAgentRunOptions CreateRunOptions(List<AITool> tools, string? instructions)
     {

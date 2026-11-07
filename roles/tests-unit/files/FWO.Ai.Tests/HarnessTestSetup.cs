@@ -130,6 +130,46 @@ internal static class HarnessTestSetup
     }
 
     /// <summary>
+    /// Runs a streaming turn of the agent with the given messages and returns its updates.
+    /// </summary>
+    internal static async Task<List<AgentResponseUpdate>> RunStreamingAsync(AIAgent agent, IEnumerable<ChatMessage> messages,
+        AgentSession? session = null, AgentRunOptions? options = null)
+    {
+        List<AgentResponseUpdate> updates = new();
+        await foreach (AgentResponseUpdate update in agent.RunStreamingAsync(messages, session, options))
+        {
+            updates.Add(update);
+        }
+        return updates;
+    }
+
+    /// <summary>
+    /// Runs a streaming turn of the agent with the given user text and returns its updates.
+    /// </summary>
+    internal static Task<List<AgentResponseUpdate>> RunStreamingAsync(AIAgent agent, string userText)
+    {
+        List<ChatMessage> messages = new() { new ChatMessage(ChatRole.User, userText) };
+        return RunStreamingAsync(agent, messages);
+    }
+
+    /// <summary>
+    /// Tells whether an update of a run holds the snapshot of the conversation (AG-UI MESSAGES_SNAPSHOT).
+    /// </summary>
+    internal static bool IsSnapshot(AgentResponseUpdate update)
+    {
+        return update.AsChatResponseUpdate().RawRepresentation is MessagesSnapshotEvent;
+    }
+
+    /// <summary>
+    /// Returns the conversation of the snapshot the updates of a run end with, as the client reads it.
+    /// </summary>
+    internal static List<ChatMessage> GetSnapshot(IEnumerable<AgentResponseUpdate> updates)
+    {
+        MessagesSnapshotEvent snapshot = (MessagesSnapshotEvent)updates.Last().AsChatResponseUpdate().RawRepresentation!;
+        return snapshot.Messages.AsChatMessages().ToList();
+    }
+
+    /// <summary>
     /// Returns the texts of the messages.
     /// </summary>
     internal static List<string> GetTexts(IEnumerable<ChatMessage> messages)

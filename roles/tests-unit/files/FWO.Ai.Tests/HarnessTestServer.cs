@@ -22,6 +22,7 @@ internal static class HarnessTestServer
     internal const string kRunError = "RUN_ERROR";
     internal const string kTextMessageContent = "TEXT_MESSAGE_CONTENT";
     internal const string kToolCallStart = "TOOL_CALL_START";
+    internal const string kMessagesSnapshot = "MESSAGES_SNAPSHOT";
 
     private const string kLoopbackUrlWithFreePort = "http://127.0.0.1:0";
     private const string kEventDataPrefix = "data:";
@@ -141,6 +142,34 @@ internal static class HarnessTestServer
         return string.Concat(events
             .Where(aguiEvent => aguiEvent.GetProperty("type").GetString() == kTextMessageContent)
             .Select(aguiEvent => aguiEvent.GetProperty("delta").GetString()));
+    }
+
+    /// <summary>
+    /// Returns the messages of the single snapshot of the conversation among the events.
+    /// </summary>
+    internal static List<JsonElement> GetSnapshotMessages(IEnumerable<JsonElement> events)
+    {
+        JsonElement snapshot = events.Single(aguiEvent => aguiEvent.GetProperty("type").GetString() == kMessagesSnapshot);
+        return snapshot.GetProperty("messages").EnumerateArray().ToList();
+    }
+
+    /// <summary>
+    /// Returns the texts of the messages of the snapshot of the conversation, of each message holding a text.
+    /// </summary>
+    internal static List<string> GetSnapshotTexts(IEnumerable<JsonElement> events)
+    {
+        return GetSnapshotMessages(events)
+            .Where(message => message.TryGetProperty("content", out JsonElement content) && content.ValueKind == JsonValueKind.String)
+            .Select(message => message.GetProperty("content").GetString() ?? "")
+            .ToList();
+    }
+
+    /// <summary>
+    /// Returns the roles of the messages of the snapshot of the conversation, in order.
+    /// </summary>
+    internal static List<string> GetSnapshotRoles(IEnumerable<JsonElement> events)
+    {
+        return GetSnapshotMessages(events).Select(message => message.GetProperty("role").GetString() ?? "").ToList();
     }
 
     /// <summary>
