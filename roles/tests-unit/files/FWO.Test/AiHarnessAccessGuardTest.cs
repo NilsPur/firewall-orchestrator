@@ -26,7 +26,7 @@ internal class AiHarnessAccessGuardTest
 
     private static readonly List<string> kPermissionKinds = ["select_permissions", "insert_permissions", "update_permissions", "delete_permissions"];
     private static readonly List<string> kConfigColumns = ["config_key", "config_value", "config_user"];
-    private static readonly List<string> kCredentialViewColumns = ["id", "is_key_pair", "secret"];
+    private static readonly List<string> kCredentialViewColumns = ["id", "is_key_pair", "secret", "username"];
     private static readonly List<string> kLanguages = ["German", "English"];
     private static readonly List<string> kAiHarnessRoleOnly = [Roles.AiHarness];
 

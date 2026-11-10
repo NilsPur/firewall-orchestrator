@@ -10,6 +10,8 @@
 - the API key is stored as a credential; a credential the AI settings use cannot be deleted
 - the AI harness reads its settings with the new technical LDAP user and role `ai-harness`, which may only read these settings and the credential they reference
 - changes of the AI settings apply within `ai_harness_settings_refresh_seconds` (default 30) without a restart
+- the AI harness can log in at an OpenAI compatible server with OAuth 2.0 (client credentials) instead of an API key: new AI settings `aiAuthMethod` and `aiTokenUrl`, client id and secret are stored as credential; the access token is kept until shortly before it expires and renewed once if the server refuses it
+- the Azure logins of the autodiscovery and of the firewall write library use the same new OAuth 2.0 client of FWO.Basics
 
 ## 9.9.1 - 05.11.2026
 - request workflow: access-task elements reference their ticket-local object-create task, so updates to the defining task remain consistent

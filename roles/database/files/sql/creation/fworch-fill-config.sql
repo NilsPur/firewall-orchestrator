@@ -80,6 +80,8 @@ insert into config (config_key, config_value, config_user) VALUES ('aiMaxOutputT
 insert into config (config_key, config_value, config_user) VALUES ('aiMaxIterationsPerRequest', '10', 0);
 insert into config (config_key, config_value, config_user) VALUES ('aiMaxConsecutiveErrorsPerRequest', '3', 0);
 insert into config (config_key, config_value, config_user) VALUES ('aiCompactionReserveTokens', '0', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiAuthMethod', 'ApiKey', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiTokenUrl', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importAppDataStartAt', '00:00:00', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importAppDataSleepTime', '0', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importSubnetDataStartAt', '00:00:00', 0);

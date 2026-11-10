@@ -144,6 +144,29 @@ internal class HarnessFwoAiConfigReaderTest
     }
 
     /// <summary>
+    /// Verifies that the columns of the view v_ai_provider_credential map to the credential, the user name (client id
+    /// of OAuth 2.0) included, with both JSON serializers the API clients use.
+    /// </summary>
+    [Test]
+    public void AiCredentialValue_ReadsTheColumnsOfTheView()
+    {
+        const string row = "{\"id\":21,\"is_key_pair\":false,\"secret\":\"encrypted\",\"username\":\"fwo-ai-client\"}";
+
+        AiCredentialValue? fromNewtonsoft = Newtonsoft.Json.JsonConvert.DeserializeObject<AiCredentialValue>(row);
+        AiCredentialValue? fromSystemText = System.Text.Json.JsonSerializer.Deserialize<AiCredentialValue>(row);
+
+        Assert.Multiple(() =>
+        {
+            foreach (AiCredentialValue? credential in new List<AiCredentialValue?> { fromNewtonsoft, fromSystemText })
+            {
+                Assert.That(credential?.Id, Is.EqualTo(kCredentialId));
+                Assert.That(credential?.Secret, Is.EqualTo("encrypted"));
+                Assert.That(credential?.Username, Is.EqualTo("fwo-ai-client"));
+            }
+        });
+    }
+
+    /// <summary>
     /// Verifies that a failed login is passed on, without creating a connection.
     /// </summary>
     [Test]

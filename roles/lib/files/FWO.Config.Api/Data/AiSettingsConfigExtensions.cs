@@ -22,6 +22,8 @@ namespace FWO.Config.Api.Data
                 Model = config.AiModel,
                 Endpoint = config.AiEndpoint,
                 CredentialId = config.AiCredentialId,
+                AuthMethod = config.AiAuthMethod,
+                TokenUrl = config.AiTokenUrl,
                 ContextWindowTokens = config.AiContextWindowTokens,
                 MaxOutputTokens = config.AiMaxOutputTokens,
                 MaxIterationsPerRequest = config.AiMaxIterationsPerRequest,
@@ -43,6 +45,8 @@ namespace FWO.Config.Api.Data
             config.AiModel = settings.Model.Trim();
             config.AiEndpoint = settings.Endpoint.Trim();
             config.AiCredentialId = settings.CredentialId;
+            config.AiAuthMethod = settings.AuthMethod;
+            config.AiTokenUrl = settings.TokenUrl.Trim();
             config.AiContextWindowTokens = settings.ContextWindowTokens;
             config.AiMaxOutputTokens = settings.MaxOutputTokens;
             config.AiMaxIterationsPerRequest = settings.MaxIterationsPerRequest;

@@ -216,8 +216,10 @@ AI settings (`FWO.Data.Ai.AiSettings`, config keys in `AiSettings.kKeys`):
 |---|---|---|
 | Provider | `aiProvider` | `None` (default, the agent is not available), `Ollama`, `OpenAi`, `Anthropic`, `Google` |
 | Model | `aiModel` | Model id known to the provider; required |
-| Endpoint | `aiEndpoint` | Optional base URL, e.g. of an OpenAI compatible server; Ollama defaults to `http://localhost:11434`. Must be https if an API key is sent to a host other than the local one |
-| API key | `aiCredentialId` | Id of the credential holding the API key as its secret; required except for Ollama. Key pairs are not offered |
+| Endpoint | `aiEndpoint` | Optional base URL, e.g. of an OpenAI compatible server; Ollama defaults to `http://localhost:11434`. Must be https if an API key or access token is sent to a host other than the local one |
+| Authentication | `aiAuthMethod` | `ApiKey` (default) or `OAuth2ClientCredentials`, see [OAuth 2.0](#oauth-20) |
+| Token URL | `aiTokenUrl` | Full URL of the OAuth 2.0 token endpoint, e.g. `https://sso.example.com/realms/<realm>/protocol/openid-connect/token` for Keycloak; required for OAuth 2.0, https unless a loopback address |
+| Credential | `aiCredentialId` | Id of the credential holding the API key as its secret, or for OAuth 2.0 the client id as user name and the client secret as secret; required except for Ollama. Key pairs are not offered |
 | Context window | `aiContextWindowTokens` | Context window of the model in tokens; required |
 | Max output tokens | `aiMaxOutputTokens` | 0 for the provider's default; must be smaller than the context window |
 | Max iterations | `aiMaxIterationsPerRequest` | Model requests per user turn (default 10), see [Agent loop](#agent-loop) |
@@ -228,6 +230,24 @@ The settings page checks the settings the way the harness does (`AiSettings.Vali
 The harness checks them again when it reads them: without a provider, or with settings it cannot use, every run fails
 with HTTP 500 and the reason is logged once per change (e.g. a missing credential), never with the API key. If the
 settings cannot be read at all, e.g. while the API is not reachable, the last usable settings stay in effect.
+
+### OAuth 2.0
+
+For an OpenAI compatible server behind an authorization server such as Keycloak, the harness can authenticate with an
+access token instead of an API key (`aiAuthMethod` = `OAuth2ClientCredentials`, provider `OpenAi` with an endpoint
+only):
+
+- The token is requested with the client credentials grant (RFC 6749, 4.4) from `aiTokenUrl`, with client id and
+  secret in the request body (`client_secret_post`) and without scope. The token client lives in FWO.Basics
+  (`FWO.Basics.OAuth.OAuthTokenClient`) and is shared with the Azure login of the autodiscovery and of the firewall
+  write library. It follows no redirects, does not decompress answers, reads at most 64 KB, times out after 30 seconds
+  and always checks the certificate of the token endpoint in the harness.
+- `CachedOAuthTokenProvider` keeps the token until 30 seconds before it expires (`expires_in`; a token without expiry
+  for a minute, a short-lived one for half its lifetime); parallel runs share one renewal.
+- `OAuthBearerPolicy` sets the token as `Authorization: Bearer` on every request of the OpenAI client. If the server
+  answers 401, the token is dropped and the request is sent once more with a new token.
+- The token provider belongs to the chat client, so a change of the AI settings, e.g. of the credential, starts with a
+  new token.
 
 ### Reading the AI settings
 
@@ -260,9 +280,11 @@ The JWT public key is read from the FWO config file (`ConfigFile.JwtPublicKey`),
   including the tool results, i.e. firewall data the user may read.
 - The AG-UI input of a client never reaches the AI provider unfiltered: the agent passes only the kept conversation, the
   new input and the user's tools on, never system or developer messages or options of the client.
-- A JWT or an API key is only sent over https, or over http to a loopback address.
-- The API key is stored encrypted in the credential store and never in the environment of the service. The harness
-  reads it with a technical user that can read this one credential only, and keeps it in memory; it is not logged.
+- A JWT, an API key, an OAuth client secret or an access token is only sent over https, or over http to a loopback
+  address.
+- The API key or the OAuth client secret is stored encrypted in the credential store and never in the environment of
+  the service. The harness reads it with a technical user that can read this one credential only, and keeps it in
+  memory, like the access token; neither is logged.
 - Exception details of failed tool calls are not passed on to the model, and run errors not to the client.
 - Tools that are not marked read-only need an approval answer before they run. The harness takes the answer, and the
   call it names, from the client: the client acts for the user with the user's JWT, which bounds what the call can do.

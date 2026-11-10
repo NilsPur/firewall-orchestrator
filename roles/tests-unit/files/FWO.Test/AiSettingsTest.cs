@@ -15,6 +15,7 @@ internal class AiSettingsTest
 {
     private const string kModel = "gpt-test";
     private const string kHttpsEndpoint = "https://llm.example.com/v1";
+    private const string kTokenUrl = "https://sso.example.com/realms/fwo/protocol/openid-connect/token";
     private const int kCredentialId = 4;
     private const int kContextWindowTokens = 100000;
     private static readonly List<AiSettingsProblem> kCredentialMissing = [AiSettingsProblem.CredentialMissing];
@@ -138,6 +139,97 @@ internal class AiSettingsTest
     }
 
     /// <summary>
+    /// Verifies that the authentication method and the token URL are read, the method ignoring case and an unknown or
+    /// numeric method falling back to the API key.
+    /// </summary>
+    [TestCase("oauth2clientcredentials", AiAuthMethod.OAuth2ClientCredentials)]
+    [TestCase("ApiKey", AiAuthMethod.ApiKey)]
+    [TestCase("1", AiAuthMethod.ApiKey)]
+    [TestCase("Kerberos", AiAuthMethod.ApiKey)]
+    [TestCase(null, AiAuthMethod.ApiKey)]
+    public void FromConfigValues_ReadsAuthMethodAndTokenUrl(string? authMethod, AiAuthMethod expectedMethod)
+    {
+        Dictionary<string, string?> configValues = new()
+        {
+            [AiSettings.kProviderKey] = "OpenAi",
+            [AiSettings.kAuthMethodKey] = authMethod,
+            [AiSettings.kTokenUrlKey] = $" {kTokenUrl} "
+        };
+
+        AiSettings settings = AiSettings.FromConfigValues(configValues);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings.AuthMethod, Is.EqualTo(expectedMethod));
+            Assert.That(settings.TokenUrl, Is.EqualTo(kTokenUrl));
+        });
+    }
+
+    /// <summary>
+    /// Verifies that OAuth 2.0 needs a credential too, but no API key.
+    /// </summary>
+    [Test]
+    public void OAuthSettings_NeedACredentialButNoApiKey()
+    {
+        AiSettings oauth = CreateValidOAuthSettings();
+        AiSettings apiKey = CreateValidSettings(AiProvider.OpenAi);
+        AiSettings ollamaWithOAuth = CreateValidSettings(AiProvider.Ollama);
+        ollamaWithOAuth.AuthMethod = AiAuthMethod.OAuth2ClientCredentials;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(oauth.Validate(), Is.Empty);
+            Assert.That(oauth.UsesOAuth, Is.True);
+            Assert.That(oauth.RequiresCredential, Is.True);
+            Assert.That(oauth.RequiresApiKey, Is.False);
+            Assert.That(apiKey.UsesOAuth, Is.False);
+            Assert.That(apiKey.RequiresApiKey, Is.True);
+            Assert.That(ollamaWithOAuth.RequiresCredential, Is.False);
+            Assert.That(new AiSettings { AuthMethod = AiAuthMethod.OAuth2ClientCredentials }.UsesOAuth, Is.False);
+        });
+        oauth.CredentialId = 0;
+        Assert.That(oauth.Validate(), Is.EqualTo(kCredentialMissing));
+    }
+
+    /// <summary>
+    /// Verifies the checks of OAuth 2.0: only for OpenAI with an endpoint, and a token URL that is absolute and uses
+    /// https unless it is a loopback address.
+    /// </summary>
+    [TestCase(AiProvider.OpenAi, kHttpsEndpoint, kTokenUrl, null)]
+    [TestCase(AiProvider.OpenAi, kHttpsEndpoint, "http://localhost:8080/realms/fwo/protocol/openid-connect/token", null)]
+    [TestCase(AiProvider.Anthropic, kHttpsEndpoint, kTokenUrl, AiSettingsProblem.OAuthNotSupported)]
+    [TestCase(AiProvider.Ollama, kHttpsEndpoint, kTokenUrl, AiSettingsProblem.OAuthNotSupported)]
+    [TestCase(AiProvider.OpenAi, "", kTokenUrl, AiSettingsProblem.OAuthEndpointMissing)]
+    [TestCase(AiProvider.OpenAi, kHttpsEndpoint, "", AiSettingsProblem.TokenUrlInvalid)]
+    [TestCase(AiProvider.OpenAi, kHttpsEndpoint, "sso.example.com/token", AiSettingsProblem.TokenUrlInvalid)]
+    [TestCase(AiProvider.OpenAi, kHttpsEndpoint, "http://sso.example.com/token", AiSettingsProblem.TokenUrlInvalid)]
+    [TestCase(AiProvider.OpenAi, kHttpsEndpoint, "ftp://sso.example.com/token", AiSettingsProblem.TokenUrlInvalid)]
+    [TestCase(AiProvider.OpenAi, "http://llm.example.com/v1", kTokenUrl, AiSettingsProblem.EndpointNotSecure)]
+    public void Validate_ChecksOAuth(AiProvider provider, string endpoint, string tokenUrl, AiSettingsProblem? expectedProblem)
+    {
+        AiSettings settings = CreateValidOAuthSettings();
+        settings.Provider = provider;
+        settings.Endpoint = endpoint;
+        settings.TokenUrl = tokenUrl;
+
+        List<AiSettingsProblem> problems = settings.Validate();
+
+        Assert.That(problems, expectedProblem == null ? Is.Empty : Has.Count.EqualTo(1).And.Contains(expectedProblem.Value));
+    }
+
+    /// <summary>
+    /// Verifies that the token URL is not checked without OAuth 2.0, as it is not used.
+    /// </summary>
+    [Test]
+    public void Validate_WithApiKey_IgnoresTokenUrl()
+    {
+        AiSettings settings = CreateValidSettings(AiProvider.OpenAi);
+        settings.TokenUrl = "not a url";
+
+        Assert.That(settings.Validate(), Is.Empty);
+    }
+
+    /// <summary>
     /// Verifies the checks of the token limits and the agent loop.
     /// </summary>
     [TestCase(0, 0, 10, 3, 0, AiSettingsProblem.ContextWindowInvalid)]
@@ -195,6 +287,8 @@ internal class AiSettingsTest
         settings.MaxIterationsPerRequest = 5;
         settings.MaxConsecutiveErrorsPerRequest = 1;
         settings.CompactionReserveTokens = 25000;
+        settings.AuthMethod = AiAuthMethod.OAuth2ClientCredentials;
+        settings.TokenUrl = $" {kTokenUrl} ";
 
         config.SetAiSettings(settings);
         AiSettings readBack = config.GetAiSettings();
@@ -203,6 +297,9 @@ internal class AiSettingsTest
         {
             Assert.That(config.AiModel, Is.EqualTo(kModel));
             Assert.That(config.AiEndpoint, Is.EqualTo(kHttpsEndpoint));
+            Assert.That(config.AiTokenUrl, Is.EqualTo(kTokenUrl));
+            Assert.That(readBack.AuthMethod, Is.EqualTo(AiAuthMethod.OAuth2ClientCredentials));
+            Assert.That(readBack.TokenUrl, Is.EqualTo(kTokenUrl));
             Assert.That(readBack.Provider, Is.EqualTo(AiProvider.Google));
             Assert.That(readBack.Model, Is.EqualTo(kModel));
             Assert.That(readBack.CredentialId, Is.EqualTo(kCredentialId));
@@ -228,6 +325,8 @@ internal class AiSettingsTest
         Assert.Multiple(() =>
         {
             Assert.That(fromConfig.Provider, Is.EqualTo(defaults.Provider));
+            Assert.That(fromConfig.AuthMethod, Is.EqualTo(defaults.AuthMethod));
+            Assert.That(fromConfig.TokenUrl, Is.EqualTo(defaults.TokenUrl));
             Assert.That(fromConfig.MaxIterationsPerRequest, Is.EqualTo(defaults.MaxIterationsPerRequest));
             Assert.That(fromConfig.MaxConsecutiveErrorsPerRequest, Is.EqualTo(defaults.MaxConsecutiveErrorsPerRequest));
             Assert.That(fromConfig.CompactionReserveTokens, Is.EqualTo(defaults.CompactionReserveTokens));
@@ -276,5 +375,17 @@ internal class AiSettingsTest
             CredentialId = kCredentialId,
             ContextWindowTokens = kContextWindowTokens
         };
+    }
+
+    /// <summary>
+    /// Creates valid settings of an OpenAI compatible server with OAuth 2.0.
+    /// </summary>
+    private static AiSettings CreateValidOAuthSettings()
+    {
+        AiSettings settings = CreateValidSettings(AiProvider.OpenAi);
+        settings.AuthMethod = AiAuthMethod.OAuth2ClientCredentials;
+        settings.Endpoint = kHttpsEndpoint;
+        settings.TokenUrl = kTokenUrl;
+        return settings;
     }
 }

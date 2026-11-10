@@ -17,6 +17,9 @@ internal class HarnessFwoAiSettingsSourceTest
     private const string kTooShortSecret = "c2hvcnQ=";
     private const string kApiKey = "sk-source-test-key-4711";
     private const string kModel = "test-model";
+    private const string kClientId = "fwo-ai-client";
+    private const string kEndpoint = "https://llm.example.test/v1";
+    private const string kTokenUrl = "https://sso.example.test/realms/fwo/protocol/openid-connect/token";
     private const int kCredentialId = 12;
     private const int kOtherCredentialId = 13;
 
@@ -65,7 +68,7 @@ internal class HarnessFwoAiSettingsSourceTest
 
         Assert.That(settings.IsConfigured, Is.True);
         Assert.That(settings.Problem, Is.Null);
-        Assert.That(settings.ApiKey, Is.Null);
+        Assert.That(settings.Secret, Is.Null);
         Assert.That(reader.CredentialReads, Is.Zero);
     }
 
@@ -81,7 +84,7 @@ internal class HarnessFwoAiSettingsSourceTest
         AiRuntimeSettings settings = await CreateSource(reader).LoadAsync(CancellationToken.None);
 
         Assert.That(settings.Problem, Is.Null);
-        Assert.That(settings.ApiKey, Is.EqualTo(kApiKey));
+        Assert.That(settings.Secret, Is.EqualTo(kApiKey));
         Assert.That(settings.Values.Provider, Is.EqualTo(AiProvider.Anthropic));
         Assert.That(settings.Values.Model, Is.EqualTo(kModel));
     }
@@ -112,8 +115,66 @@ internal class HarnessFwoAiSettingsSourceTest
 
             Assert.That(settings.Problem, Is.Not.Null.And.Contains(kCredentialId.ToString()));
             Assert.That(settings.Problem, Does.Not.Contain(kApiKey));
-            Assert.That(settings.ApiKey, Is.Null);
+            Assert.That(settings.Secret, Is.Null);
         }
+    }
+
+    /// <summary>
+    /// Verifies that for OAuth 2.0 the client secret is decrypted and the user name of the credential is the client id.
+    /// </summary>
+    [Test]
+    public async Task LoadAsync_WithOAuth_ReadsClientIdAndSecret()
+    {
+        FakeAiConfigReader reader = CreateOAuthReader();
+        reader.Credential = new AiCredentialValue { Id = kCredentialId, Username = $" {kClientId} ", Secret = AesEnc.Encrypt(kApiKey, kMainKey) };
+
+        AiRuntimeSettings settings = await CreateSource(reader).LoadAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings.Problem, Is.Null);
+            Assert.That(settings.Secret, Is.EqualTo(kApiKey));
+            Assert.That(settings.ClientId, Is.EqualTo(kClientId));
+            Assert.That(settings.Values.UsesOAuth, Is.True);
+        });
+    }
+
+    /// <summary>
+    /// Verifies that the user name of the credential is not passed on for an API key.
+    /// </summary>
+    [Test]
+    public async Task LoadAsync_WithApiKey_IgnoresUserName()
+    {
+        FakeAiConfigReader reader = CreateReader(AiProvider.OpenAi);
+        reader.Credential = new AiCredentialValue { Id = kCredentialId, Username = kClientId, Secret = AesEnc.Encrypt(kApiKey, kMainKey) };
+
+        AiRuntimeSettings settings = await CreateSource(reader).LoadAsync(CancellationToken.None);
+
+        Assert.That(settings.ClientId, Is.Null);
+    }
+
+    /// <summary>
+    /// Verifies that OAuth 2.0 needs the client id as user name, and that a key pair is refused naming the client secret.
+    /// </summary>
+    [Test]
+    public async Task LoadAsync_WithOAuthAndUnusableCredential_ReturnsProblem()
+    {
+        string encryptedSecret = AesEnc.Encrypt(kApiKey, kMainKey);
+        FakeAiConfigReader withoutUserName = CreateOAuthReader();
+        withoutUserName.Credential = new AiCredentialValue { Id = kCredentialId, Username = " ", Secret = encryptedSecret };
+        FakeAiConfigReader keyPair = CreateOAuthReader();
+        keyPair.Credential = new AiCredentialValue { Id = kCredentialId, Username = kClientId, IsKeyPair = true, Secret = encryptedSecret };
+
+        AiRuntimeSettings missingClientId = await CreateSource(withoutUserName).LoadAsync(CancellationToken.None);
+        AiRuntimeSettings refusedKeyPair = await CreateSource(keyPair).LoadAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(missingClientId.Problem, Does.Contain("client id"));
+            Assert.That(missingClientId.Secret, Is.Null);
+            Assert.That(refusedKeyPair.Problem, Does.Contain("client secret"));
+            Assert.That(refusedKeyPair.Problem, Does.Not.Contain(kApiKey));
+        });
     }
 
     /// <summary>
@@ -154,6 +215,18 @@ internal class HarnessFwoAiSettingsSourceTest
         reader.ConfigValues[AiSettings.kModelKey] = kModel;
         reader.ConfigValues[AiSettings.kCredentialIdKey] = kCredentialId.ToString();
         reader.ConfigValues[AiSettings.kContextWindowTokensKey] = HarnessTestSetup.kContextWindowTokens.ToString();
+        return reader;
+    }
+
+    /// <summary>
+    /// Creates a reader with valid settings of an OpenAI compatible server with OAuth 2.0.
+    /// </summary>
+    private static FakeAiConfigReader CreateOAuthReader()
+    {
+        FakeAiConfigReader reader = CreateReader(AiProvider.OpenAi);
+        reader.ConfigValues[AiSettings.kAuthMethodKey] = nameof(AiAuthMethod.OAuth2ClientCredentials);
+        reader.ConfigValues[AiSettings.kEndpointKey] = kEndpoint;
+        reader.ConfigValues[AiSettings.kTokenUrlKey] = kTokenUrl;
         return reader;
     }
 }

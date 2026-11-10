@@ -1,4 +1,5 @@
 using Anthropic;
+using FWO.Basics.OAuth;
 using FWO.Data.Ai;
 using Google.GenAI.Types;
 using Microsoft.Extensions.AI;
@@ -18,6 +19,7 @@ public static class ChatClientFactory
     internal const string kDefaultOllamaEndpoint = "http://localhost:11434";
 
     private const string kProviderEndpointPurpose = "AI provider endpoint";
+    private const string kTokenUrlPurpose = "token URL";
 
     /// <summary>
     /// Creates the chat client of the configured provider. Disposing the returned client frees the SDK client too.
@@ -57,6 +59,11 @@ public static class ChatClientFactory
             throw new ArgumentException("A model is required.", nameof(settings));
         }
         ValidateTokenLimits(settings);
+        if (settings.OAuthClient != null)
+        {
+            ValidateOAuth(settings, settings.OAuthClient);
+            return;
+        }
         bool sendsApiKey = settings.Provider != AiProvider.Ollama;
         if (sendsApiKey && string.IsNullOrWhiteSpace(settings.ApiKey))
         {
@@ -74,6 +81,26 @@ public static class ChatClientFactory
         {
             EndpointGuard.RequireHttpOrHttps(settings.Endpoint, kProviderEndpointPurpose);
         }
+    }
+
+    /// <summary>
+    /// Checks the settings of OAuth 2.0: only for an OpenAI compatible server, which needs an endpoint, and both the
+    /// endpoint (it gets the access token) and the token URL (it gets the client secret) must use https unless they are
+    /// a loopback address.
+    /// </summary>
+    /// <exception cref="ArgumentException">OAuth 2.0 cannot be used with these settings.</exception>
+    private static void ValidateOAuth(AiProviderSettings settings, OAuthClientCredentials oauthClient)
+    {
+        if (settings.Provider != AiProvider.OpenAi)
+        {
+            throw new ArgumentException($"OAuth 2.0 is only supported for {AiProvider.OpenAi}.", nameof(settings));
+        }
+        if (settings.Endpoint == null)
+        {
+            throw new ArgumentException("OAuth 2.0 needs the endpoint of an OpenAI compatible server.", nameof(settings));
+        }
+        EndpointGuard.RequireHttpsOrLoopback(settings.Endpoint, kProviderEndpointPurpose);
+        EndpointGuard.RequireHttpsOrLoopback(oauthClient.TokenUrl, kTokenUrlPurpose);
     }
 
     /// <summary>
@@ -158,7 +185,8 @@ public static class ChatClientFactory
     }
 
     /// <summary>
-    /// Creates an OpenAI client, for a custom OpenAI compatible endpoint if one is given.
+    /// Creates an OpenAI client, for a custom OpenAI compatible endpoint if one is given; with the access token of
+    /// OAuth 2.0 if configured, else with the API key.
     /// </summary>
     private static IChatClient CreateOpenAiClient(AiProviderSettings settings)
     {
@@ -167,8 +195,29 @@ public static class ChatClientFactory
         {
             clientOptions.Endpoint = settings.Endpoint;
         }
+        if (settings.OAuthClient != null)
+        {
+            return CreateOpenAiOAuthClient(settings.Model, settings.OAuthClient, clientOptions);
+        }
         OpenAIClient openAiClient = new(new ApiKeyCredential(GetApiKey(settings)), clientOptions);
         return openAiClient.GetChatClient(settings.Model).AsIChatClient();
+    }
+
+    /// <summary>
+    /// Creates an OpenAI client that sends an access token of OAuth 2.0 instead of an API key. The token is kept until
+    /// shortly before it expires; its provider, with the connections to the token endpoint, is disposed with the client.
+    /// The certificate of the token endpoint is always checked.
+    /// </summary>
+    private static IChatClient CreateOpenAiOAuthClient(string model, OAuthClientCredentials oauthClient, OpenAIClientOptions clientOptions)
+    {
+        CachedOAuthTokenProvider tokenProvider = new(new OAuthTokenClient(checkCertificates: true), oauthClient);
+        // the constructor taking an authentication policy is experimental in the OpenAI SDK 2.14 (OPENAI001); it is the
+        // only way to authenticate without an API key, and a change in a later SDK version shows up when building
+#pragma warning disable OPENAI001
+        OpenAIClient openAiClient = new(new OAuthBearerPolicy(tokenProvider), clientOptions);
+#pragma warning restore OPENAI001
+        IChatClient chatClient = openAiClient.GetChatClient(model).AsIChatClient();
+        return new ProviderChatClient(chatClient, tokenProvider);
     }
 
     /// <summary>

@@ -18,7 +18,8 @@ public sealed class AiConfigValue
 }
 
 /// <summary>
-/// Credential of the AI provider returned by the query getAiProviderCredential (view v_ai_provider_credential).
+/// Credential of the AI provider returned by the query getAiProviderCredential (view v_ai_provider_credential): the API
+/// key, or the client id and secret of OAuth 2.0.
 /// A class rather than a record on purpose: the generated ToString of a record would print the secret.
 /// </summary>
 public sealed class AiCredentialValue
@@ -31,7 +32,11 @@ public sealed class AiCredentialValue
     [JsonProperty("is_key_pair"), JsonPropertyName("is_key_pair")]
     public bool IsKeyPair { get; set; }
 
-    /// <summary>Secret of the credential, encrypted with the main key. Never logged.</summary>
+    /// <summary>Secret of the credential, encrypted with the main key: the API key, or the OAuth client secret. Never logged.</summary>
     [JsonProperty("secret"), JsonPropertyName("secret")]
     public string Secret { get; set; } = "";
+
+    /// <summary>User name of the credential: the OAuth client id; not used for an API key.</summary>
+    [JsonProperty("username"), JsonPropertyName("username")]
+    public string Username { get; set; } = "";
 }

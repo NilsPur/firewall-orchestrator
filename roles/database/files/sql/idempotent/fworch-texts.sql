@@ -658,7 +658,7 @@ INSERT INTO txt VALUES ('whats_new_facts', 'German', '
     <li>In der Genehmigungsphase gibt es eine neue Detailansicht f&uuml;r Tickets: Zugriffs-, Objekt-, Gruppen- und Zeitobjekt-Auftr&auml;ge werden als Karten mit aufgel&ouml;sten oder technischen Details angezeigt. Je nach erlaubten &Auml;nderungen k&ouml;nnen einzelne Felder &uuml;ber eigene Bearbeitungsdialoge ge&auml;ndert werden; Zeitobjekte werden aus der Flow DB oder aus demselben Ticket ausgew&auml;hlt und mit der konfigurierten Genauigkeit dargestellt.</li>
     <li>Neuer Report-Typ &quot;Changes: NAT&quot; zeigt &Auml;nderungen an NAT-Regeln mit urspr&uuml;nglicher und umgesetzter Quelle, Ziel und Dienst. In den FW-&Auml;nderungstrigger-Einstellungen k&ouml;nnen eigene Email-Benachrichtigungen &uuml;ber NAT-Regel&auml;nderungen (inklusive &Auml;nderungen an in NAT-Regeln verwendeten Objekten) mit diesem Report angelegt werden.</li>
     <li>Modellierung: Die fachliche Begr&uuml;ndung einer Verbindung, die Beschreibung einer Schnittstelle oder die Begr&uuml;ndung einer Schnittstellennutzung kann per Schaltfl&auml;che von einer KI bewertet werden (stichhaltig, unzureichend, nicht stichhaltig), mit R&uuml;ckfragen an den Antragsteller und einem Verbesserungsvorschlag. Die Funktion wird in den Modellierungseinstellungen aktiviert und ben&ouml;tigt den KI-Server mit einem konfigurierten KI-Anbieter.</li>
-    <li>KI-Anbieter, Modell, Endpunkt und die Grenzen der Agentenschleife des KI-Servers werden auf der neuen Seite Einstellungen - KI-Einstellungen gepflegt statt &uuml;ber Umgebungsvariablen. Der API-Schl&uuml;ssel wird als Zugangsdaten in der Zugangsdatenverwaltung gespeichert.</li>
+    <li>KI-Anbieter, Modell, Endpunkt und die Grenzen der Agentenschleife des KI-Servers werden auf der neuen Seite Einstellungen - KI-Einstellungen gepflegt. Der API-Schl&uuml;ssel wird als Zugangsdaten in der Zugangsdatenverwaltung gespeichert. F&uuml;r einen OpenAI-kompatiblen Server kann sich der KI-Server auch mit OAuth 2.0 (Client Credentials) anmelden: er holt ein Zugriffstoken von der Token-URL und sendet es als Bearer-Token.</li>
     <li>Details: siehe <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">Release Notes.</a></li>
 </ul>
 ');
@@ -681,7 +681,7 @@ INSERT INTO txt VALUES ('whats_new_facts', 'English', '
     <li>The approval phase now provides a ticket details view: access, object, group, and time-object tasks are shown as cards with resolved or technical details. Depending on the allowed changes, individual fields can be edited through dedicated dialogs; time objects are selected from the Flow DB or from the same ticket and displayed with the configured precision.</li>
     <li>New report type &quot;Changes: NAT&quot; shows NAT rule changes with original and translated source, destination and service. Separate email notifications about NAT rule changes (including changes of objects used in NAT rules) with this report can be defined in the FW change trigger settings.</li>
     <li>Modelling: The functional reason of a connection, the description of an interface or the reason of an interface usage can be assessed by an AI at the push of a button (genuine, insufficient, not genuine), with questions to the requester and a proposal for improvement. The feature is activated in the modelling settings and needs the AI server with a configured AI provider.</li>
-    <li>The AI provider, model, endpoint and the limits of the agent loop of the AI server are maintained on the new page Settings - AI Settings instead of environment variables. The API key is stored as a credential in the credential management.</li>
+    <li>The AI provider, model, endpoint and the limits of the agent loop of the AI server are maintained on the new page Settings - AI Settings. The API key is stored as a credential in the credential management. For an OpenAI compatible server the AI server can log in with OAuth 2.0 (client credentials) too: it gets an access token from the token URL and sends it as bearer token.</li>
     <li>Details: see <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">release notes.</a></li>
 </ul>
 ');
@@ -2513,8 +2513,16 @@ INSERT INTO txt VALUES ('ai_model',             'German', 	'Modell');
 INSERT INTO txt VALUES ('ai_model',             'English', 	'Model');
 INSERT INTO txt VALUES ('ai_endpoint',          'German', 	'Endpunkt-URL');
 INSERT INTO txt VALUES ('ai_endpoint',          'English', 	'Endpoint URL');
-INSERT INTO txt VALUES ('ai_credential',        'German', 	'Zugangsdaten (API-Schl&uuml;ssel)');
-INSERT INTO txt VALUES ('ai_credential',        'English', 	'Credential (API key)');
+INSERT INTO txt VALUES ('ai_auth_method',       'German', 	'Authentifizierung');
+INSERT INTO txt VALUES ('ai_auth_method',       'English', 	'Authentication');
+INSERT INTO txt VALUES ('ai_auth_api_key',      'German', 	'API-Schl&uuml;ssel');
+INSERT INTO txt VALUES ('ai_auth_api_key',      'English', 	'API key');
+INSERT INTO txt VALUES ('ai_auth_oauth2_client_credentials', 'German', 'OAuth 2.0 (Client Credentials)');
+INSERT INTO txt VALUES ('ai_auth_oauth2_client_credentials', 'English', 'OAuth 2.0 (client credentials)');
+INSERT INTO txt VALUES ('ai_token_url',         'German', 	'Token-URL');
+INSERT INTO txt VALUES ('ai_token_url',         'English', 	'Token URL');
+INSERT INTO txt VALUES ('ai_credential',        'German', 	'Zugangsdaten');
+INSERT INTO txt VALUES ('ai_credential',        'English', 	'Credential');
 INSERT INTO txt VALUES ('ai_context_window_tokens', 'German', 'Kontextfenster (Tokens)');
 INSERT INTO txt VALUES ('ai_context_window_tokens', 'English', 'Context window (tokens)');
 INSERT INTO txt VALUES ('ai_max_output_tokens', 'German', 	'Max. Ausgabe-Tokens');
@@ -5314,8 +5322,8 @@ INSERT INTO txt VALUES ('E5302', 'German',  'Die Check-Point-LayerGuard-Sektions
 INSERT INTO txt VALUES ('E5302', 'English', 'The Check Point LayerGuard section name template is invalid. Use fixed text and the placeholders @@SOURCE_ZONE@@ and @@DESTINATION_ZONE@@.');
 INSERT INTO txt VALUES ('E5303', 'German',  'Bitte ein Modell angeben.');
 INSERT INTO txt VALUES ('E5303', 'English', 'Please enter a model.');
-INSERT INTO txt VALUES ('E5304', 'German',  'Dieser KI-Anbieter ben&ouml;tigt Zugangsdaten mit dem API-Schl&uuml;ssel als Passwort.');
-INSERT INTO txt VALUES ('E5304', 'English', 'This AI provider needs a credential with the API key as secret.');
+INSERT INTO txt VALUES ('E5304', 'German',  'Dieser KI-Anbieter ben&ouml;tigt Zugangsdaten: mit dem API-Schl&uuml;ssel als Passwort, bei OAuth 2.0 mit der Client-ID als Benutzername und dem Client-Secret als Passwort.');
+INSERT INTO txt VALUES ('E5304', 'English', 'This AI provider needs a credential: with the API key as secret, for OAuth 2.0 with the client id as user name and the client secret as secret.');
 INSERT INTO txt VALUES ('E5305', 'German',  'Die Endpunkt-URL muss eine absolute http- oder https-URL sein.');
 INSERT INTO txt VALUES ('E5305', 'English', 'The endpoint URL must be an absolute http or https URL.');
 INSERT INTO txt VALUES ('E5306', 'German',  'Der API-Schl&uuml;ssel wird nur &uuml;ber https gesendet, au&szlig;er an eine Loopback-Adresse.');
@@ -5330,6 +5338,12 @@ INSERT INTO txt VALUES ('E5310', 'German',  'Die max. Werkzeugfehler in Folge d&
 INSERT INTO txt VALUES ('E5310', 'English', 'The max. consecutive tool errors must not be negative.');
 INSERT INTO txt VALUES ('E5311', 'German',  'Die Reserve f&uuml;r die Verlaufsverdichtung muss kleiner als das Kontextfenster und gr&ouml;&szlig;er als die max. Ausgabe-Tokens sein.');
 INSERT INTO txt VALUES ('E5311', 'English', 'The compaction reserve must be smaller than the context window and larger than the max. output tokens.');
+INSERT INTO txt VALUES ('E5312', 'German',  'OAuth 2.0 wird nur f&uuml;r den Anbieter OpenAi (einen OpenAI-kompatiblen Server) unterst&uuml;tzt.');
+INSERT INTO txt VALUES ('E5312', 'English', 'OAuth 2.0 is only supported for the provider OpenAi (an OpenAI compatible server).');
+INSERT INTO txt VALUES ('E5313', 'German',  'Bei OAuth 2.0 bitte die Endpunkt-URL des OpenAI-kompatiblen Servers angeben.');
+INSERT INTO txt VALUES ('E5313', 'English', 'For OAuth 2.0 please enter the endpoint URL of the OpenAI compatible server.');
+INSERT INTO txt VALUES ('E5314', 'German',  'Die Token-URL muss eine absolute https-URL sein; http ist nur f&uuml;r eine Loopback-Adresse erlaubt.');
+INSERT INTO txt VALUES ('E5314', 'English', 'The token URL must be an absolute https URL; http is only allowed for a loopback address.');
 
 INSERT INTO txt VALUES ('E5401', 'German',  'Bitte das alte Passwort eintragen');
 INSERT INTO txt VALUES ('E5401', 'English', 'Please insert the old password');
@@ -7417,13 +7431,17 @@ INSERT INTO txt VALUES ('H5371', 'English', 'AI provider: Ollama (usually a loca
 INSERT INTO txt VALUES ('H5372', 'German',  'Modell: Name des Modells, wie ihn der Anbieter in seiner Dokumentation nennt. Pflichtfeld, sobald ein Anbieter gew&auml;hlt ist.');
 INSERT INTO txt VALUES ('H5372', 'English', 'Model: name of the model as the provider names it in its documentation. Required once a provider is selected.');
 INSERT INTO txt VALUES ('H5373', 'German',  'Endpunkt-URL: Optionale Basis-URL des Anbieters, z.B. eines OpenAI-kompatiblen Servers; leer f&uuml;r die Standard-URL des Anbieters
-    (bei Ollama http://localhost:11434). Wird ein API-Schl&uuml;ssel gesendet, muss sie https verwenden, au&szlig;er bei einer Loopback-Adresse.');
+    (bei Ollama http://localhost:11434). Wird ein API-Schl&uuml;ssel oder ein Zugriffstoken gesendet, muss sie https verwenden, au&szlig;er bei einer Loopback-Adresse.
+    Bei OAuth 2.0 ist sie erforderlich.');
 INSERT INTO txt VALUES ('H5373', 'English', 'Endpoint URL: optional base URL of the provider, e.g. of an OpenAI compatible server; empty for the default URL of the provider
-    (for Ollama http://localhost:11434). If an API key is sent, it must use https unless it is a loopback address.');
+    (for Ollama http://localhost:11434). If an API key or an access token is sent, it must use https unless it is a loopback address.
+    Required for OAuth 2.0.');
 INSERT INTO txt VALUES ('H5374', 'German',  'Zugangsdaten: Die Zugangsdaten aus der <a href="/help/settings/credentials">Zugangsdatenverwaltung</a>, deren Passwort
-    der API-Schl&uuml;ssel des Anbieters ist (der Benutzername wird nicht verwendet). F&uuml;r alle Anbieter au&szlig;er Ollama erforderlich. Schl&uuml;sselpaare k&ouml;nnen nicht gew&auml;hlt werden.');
+    der API-Schl&uuml;ssel des Anbieters ist (der Benutzername wird nicht verwendet), bei OAuth 2.0 mit der Client-ID als Benutzername und dem Client-Secret als Passwort.
+    F&uuml;r alle Anbieter au&szlig;er Ollama erforderlich. Schl&uuml;sselpaare k&ouml;nnen nicht gew&auml;hlt werden.');
 INSERT INTO txt VALUES ('H5374', 'English', 'Credential: the credential from the <a href="/help/settings/credentials">credential management</a> whose secret
-    is the API key of the provider (the user name is not used). Required for all providers but Ollama. Key pairs cannot be selected.');
+    is the API key of the provider (the user name is not used), for OAuth 2.0 with the client id as user name and the client secret as secret.
+    Required for all providers but Ollama. Key pairs cannot be selected.');
 INSERT INTO txt VALUES ('H5375', 'German',  'Kontextfenster: Gr&ouml;&szlig;e des Kontextfensters des Modells in Tokens, laut Dokumentation des Anbieters. Der Assistent fasst
     &auml;ltere Teile eines Gespr&auml;chs zusammen, bevor es das Kontextfenster &uuml;berschreitet; Ollama erh&auml;lt den Wert als num_ctx. Pflichtfeld, sobald ein Anbieter gew&auml;hlt ist.');
 INSERT INTO txt VALUES ('H5375', 'English', 'Context window: size of the context window of the model in tokens, as documented by the provider. The assistant summarizes
@@ -7444,6 +7462,16 @@ INSERT INTO txt VALUES ('H5381', 'German',  'Der KI-Server liest die Einstellung
     Zugangsdaten lesen darf, und &uuml;bernimmt &Auml;nderungen ohne Neustart nach sp&auml;testens 30 Sekunden. Hier gew&auml;hlte Zugangsdaten k&ouml;nnen nicht gel&ouml;scht werden.');
 INSERT INTO txt VALUES ('H5381', 'English', 'The AI server reads the settings with a technical user of its own (role ai-harness), which may only read these settings and the selected
     credential, and applies changes without restart within 30 seconds. A credential selected here cannot be deleted.');
+INSERT INTO txt VALUES ('H5382', 'German',  'Authentifizierung: Wie sich der KI-Server beim Anbieter anmeldet. API-Schl&uuml;ssel sendet den API-Schl&uuml;ssel der Zugangsdaten.
+    OAuth 2.0 (Client Credentials) holt mit Client-ID und Client-Secret der Zugangsdaten ein Zugriffstoken von der Token-URL und sendet es statt eines API-Schl&uuml;ssels
+    als Bearer-Token; das Token wird bis kurz vor seinem Ablauf wiederverwendet. Nur f&uuml;r den Anbieter OpenAi mit der Endpunkt-URL eines OpenAI-kompatiblen Servers.');
+INSERT INTO txt VALUES ('H5382', 'English', 'Authentication: how the AI server logs in at the provider. API key sends the API key of the credential.
+    OAuth 2.0 (client credentials) gets an access token from the token URL with the client id and client secret of the credential and sends it as bearer token
+    instead of an API key; the token is reused until shortly before it expires. Only for the provider OpenAi with the endpoint URL of an OpenAI compatible server.');
+INSERT INTO txt VALUES ('H5383', 'German',  'Token-URL: Vollst&auml;ndige URL des Token-Endpunkts f&uuml;r OAuth 2.0, bei Keycloak z.B. https://sso.example.com/realms/&lt;Realm&gt;/protocol/openid-connect/token.
+    Pflichtfeld bei OAuth 2.0. Sie muss https verwenden, au&szlig;er bei einer Loopback-Adresse; das Zertifikat wird immer gepr&uuml;ft.');
+INSERT INTO txt VALUES ('H5383', 'English', 'Token URL: full URL of the token endpoint for OAuth 2.0, for Keycloak e.g. https://sso.example.com/realms/&lt;realm&gt;/protocol/openid-connect/token.
+    Required for OAuth 2.0. It must use https unless it is a loopback address; its certificate is always checked.');
 INSERT INTO txt VALUES ('H5401', 'German',  'Der Admin kann verschiedene Standardwerte definieren, die dann f&uuml;r alle Nutzer gelten.<br>
     Manche von ihnen k&ouml;nnen in den individuellen Nutzereinstellungen &uuml;berschrieben werden.
 ');

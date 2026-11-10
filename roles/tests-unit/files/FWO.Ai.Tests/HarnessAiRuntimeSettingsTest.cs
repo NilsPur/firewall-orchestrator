@@ -17,6 +17,8 @@ internal class HarnessAiRuntimeSettingsTest
     private const string kApiKey = "sk-runtime-test-key-4711";
     private const string kOtherApiKey = "sk-runtime-test-key-0815";
     private const string kEndpoint = "https://llm.example.com/v1";
+    private const string kTokenUrl = "https://sso.example.com/realms/fwo/protocol/openid-connect/token";
+    private const string kClientId = "fwo-ai-client";
     private const int kContextWindowTokens = 100000;
     private const int kMaxOutputTokens = 4000;
     private const int kMaxIterations = 6;
@@ -99,6 +101,68 @@ internal class HarnessAiRuntimeSettingsTest
     }
 
     /// <summary>
+    /// Verifies that OAuth 2.0 gives the provider the client credentials with the token URL instead of an API key.
+    /// </summary>
+    [Test]
+    public void ToProviderSettings_WithOAuth_PassesClientCredentialsOn()
+    {
+        AiRuntimeSettings runtimeSettings = new(CreateOAuthSettings(), kApiKey, clientId: kClientId);
+
+        AiProviderSettings providerSettings = runtimeSettings.ToProviderSettings();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(providerSettings.ApiKey, Is.Null);
+            Assert.That(providerSettings.OAuthClient, Is.Not.Null);
+            Assert.That(providerSettings.OAuthClient!.TokenUrl, Is.EqualTo(new Uri(kTokenUrl)));
+            Assert.That(providerSettings.OAuthClient.ClientId, Is.EqualTo(kClientId));
+            Assert.That(providerSettings.OAuthClient.ClientSecret, Is.EqualTo(kApiKey));
+            Assert.That(providerSettings.OAuthClient.Scope, Is.Null);
+            Assert.That(new AiRuntimeSettings(CreateSettings(AiProvider.OpenAi), kApiKey).ToProviderSettings().OAuthClient, Is.Null);
+        });
+    }
+
+    /// <summary>
+    /// Verifies that OAuth 2.0 without token URL, with a relative one, or without client id or secret is refused,
+    /// without naming the token URL or the secret.
+    /// </summary>
+    [TestCase("", kClientId, kApiKey)]
+    [TestCase("sso/token", kClientId, kApiKey)]
+    [TestCase(kTokenUrl, null, kApiKey)]
+    [TestCase(kTokenUrl, kClientId, null)]
+    public void ToProviderSettings_WithIncompleteOAuth_Throws(string tokenUrl, string? clientId, string? secret)
+    {
+        AiSettings settings = CreateOAuthSettings();
+        settings.TokenUrl = tokenUrl;
+
+        ArgumentException? exception = Assert.Throws<ArgumentException>(() => new AiRuntimeSettings(settings, secret, clientId: clientId).ToProviderSettings());
+
+        Assert.That(exception!.Message, Does.Not.Contain(kApiKey));
+        Assert.That(exception.Message, Does.Not.Contain("sso/token"));
+    }
+
+    /// <summary>
+    /// Verifies that a changed authentication method, token URL or client id makes the settings differ.
+    /// </summary>
+    [Test]
+    public void HasSameValues_ComparesOAuthValues()
+    {
+        AiRuntimeSettings settings = new(CreateOAuthSettings(), kApiKey, clientId: kClientId);
+        AiSettings otherTokenUrl = CreateOAuthSettings();
+        otherTokenUrl.TokenUrl = "https://sso.example.com/realms/other/protocol/openid-connect/token";
+        AiSettings apiKeyMethod = CreateOAuthSettings();
+        apiKeyMethod.AuthMethod = AiAuthMethod.ApiKey;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings.HasSameValues(new AiRuntimeSettings(CreateOAuthSettings(), kApiKey, clientId: kClientId)), Is.True);
+            Assert.That(settings.HasSameValues(new AiRuntimeSettings(CreateOAuthSettings(), kApiKey, clientId: "other-client")), Is.False);
+            Assert.That(settings.HasSameValues(new AiRuntimeSettings(otherTokenUrl, kApiKey, clientId: kClientId)), Is.False);
+            Assert.That(settings.HasSameValues(new AiRuntimeSettings(apiKeyMethod, kApiKey, clientId: kClientId)), Is.False);
+        });
+    }
+
+    /// <summary>
     /// Verifies that the API key does not show in the text of the settings, e.g. in a log message.
     /// </summary>
     [Test]
@@ -127,5 +191,16 @@ internal class HarnessAiRuntimeSettingsTest
             MaxConsecutiveErrorsPerRequest = kMaxConsecutiveErrors,
             CompactionReserveTokens = kCompactionReserveTokens
         };
+    }
+
+    /// <summary>
+    /// Creates valid settings of an OpenAI compatible server with OAuth 2.0.
+    /// </summary>
+    private static AiSettings CreateOAuthSettings()
+    {
+        AiSettings settings = CreateSettings(AiProvider.OpenAi);
+        settings.AuthMethod = AiAuthMethod.OAuth2ClientCredentials;
+        settings.TokenUrl = kTokenUrl;
+        return settings;
     }
 }

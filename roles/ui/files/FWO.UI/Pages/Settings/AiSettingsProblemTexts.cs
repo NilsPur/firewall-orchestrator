@@ -17,7 +17,10 @@ namespace FWO.Ui.Pages.Settings
             [AiSettingsProblem.MaxOutputTokensInvalid] = "E5308",
             [AiSettingsProblem.MaxIterationsInvalid] = "E5309",
             [AiSettingsProblem.MaxConsecutiveErrorsInvalid] = "E5310",
-            [AiSettingsProblem.CompactionReserveInvalid] = "E5311"
+            [AiSettingsProblem.CompactionReserveInvalid] = "E5311",
+            [AiSettingsProblem.OAuthNotSupported] = "E5312",
+            [AiSettingsProblem.OAuthEndpointMissing] = "E5313",
+            [AiSettingsProblem.TokenUrlInvalid] = "E5314"
         };
 
         /// <summary>

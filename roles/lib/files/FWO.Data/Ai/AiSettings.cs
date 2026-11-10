@@ -32,14 +32,24 @@ namespace FWO.Data.Ai
         MaxConsecutiveErrorsInvalid,
 
         /// <summary>The compaction reserve is negative, does not fit into the context window, or does not hold a full answer.</summary>
-        CompactionReserveInvalid
+        CompactionReserveInvalid,
+
+        /// <summary>OAuth 2.0 is selected for a provider other than OpenAI (an OpenAI compatible server).</summary>
+        OAuthNotSupported,
+
+        /// <summary>OAuth 2.0 is selected without an endpoint; the public OpenAI API does not accept such tokens.</summary>
+        OAuthEndpointMissing,
+
+        /// <summary>The token URL of OAuth 2.0 is missing, not absolute, or plain http to a host that is not a loopback address.</summary>
+        TokenUrlInvalid
     }
 
     /// <summary>
     /// Settings of the AI provider and of the agent loop of the AI harness (FWO.Ai.Harness), stored as global config
     /// items (config_user 0) under the keys below. Edited on the AI settings page of the UI and read by the AI harness
-    /// with its technical user. The API key is not part of the settings: they reference a credential of the credential
-    /// store (<see cref="CredentialId"/>), whose secret is the API key.
+    /// with its technical user. Secrets are not part of the settings: they reference a credential of the credential
+    /// store (<see cref="CredentialId"/>), whose secret is the API key, or for OAuth 2.0 (<see cref="AuthMethod"/>) whose
+    /// user name is the client id and whose secret is the client secret.
     /// </summary>
     public class AiSettings
     {
@@ -73,6 +83,12 @@ namespace FWO.Data.Ai
         /// <summary>Config key of <see cref="CompactionReserveTokens"/>.</summary>
         public const string kCompactionReserveTokensKey = "aiCompactionReserveTokens";
 
+        /// <summary>Config key of <see cref="AuthMethod"/>.</summary>
+        public const string kAuthMethodKey = "aiAuthMethod";
+
+        /// <summary>Config key of <see cref="TokenUrl"/>.</summary>
+        public const string kTokenUrlKey = "aiTokenUrl";
+
         /// <summary>
         /// Default maximum number of model requests offering the tools per turn. Lower than the default of
         /// Microsoft.Extensions.AI (40), to bound the cost of a single turn.
@@ -94,7 +110,7 @@ namespace FWO.Data.Ai
         public static readonly IReadOnlyList<string> kKeys =
         [
             kProviderKey, kModelKey, kEndpointKey, kCredentialIdKey, kContextWindowTokensKey, kMaxOutputTokensKey,
-            kMaxIterationsPerRequestKey, kMaxConsecutiveErrorsPerRequestKey, kCompactionReserveTokensKey
+            kMaxIterationsPerRequestKey, kMaxConsecutiveErrorsPerRequestKey, kCompactionReserveTokensKey, kAuthMethodKey, kTokenUrlKey
         ];
 
         /// <summary>Provider to talk to; <see cref="AiProvider.None"/> if the AI functions are not available.</summary>
@@ -107,9 +123,19 @@ namespace FWO.Data.Ai
         public string Endpoint { get; set; } = "";
 
         /// <summary>
-        /// Id of the credential whose secret is the API key; 0 if none. Required for all providers but Ollama.
+        /// Id of the credential whose secret is the API key, or for OAuth 2.0 whose user name is the client id and whose
+        /// secret is the client secret; 0 if none. Required for all providers but Ollama.
         /// </summary>
         public int CredentialId { get; set; }
+
+        /// <summary>How the harness authenticates at the provider: with an API key, or with an OAuth 2.0 access token.</summary>
+        public AiAuthMethod AuthMethod { get; set; } = AiAuthMethod.ApiKey;
+
+        /// <summary>
+        /// Absolute URL of the token endpoint for OAuth 2.0 (client credentials grant), e.g. of a Keycloak realm; only
+        /// used with <see cref="AiAuthMethod.OAuth2ClientCredentials"/>.
+        /// </summary>
+        public string TokenUrl { get; set; } = "";
 
         /// <summary>Context window of the model in tokens; required and positive.</summary>
         public int ContextWindowTokens { get; set; }
@@ -132,8 +158,14 @@ namespace FWO.Data.Ai
         /// <summary>Whether an AI provider is configured.</summary>
         public bool IsConfigured => Provider != AiProvider.None;
 
-        /// <summary>Whether the provider needs an API key, i.e. a credential.</summary>
-        public bool RequiresApiKey => IsConfigured && Provider != AiProvider.Ollama;
+        /// <summary>Whether the provider needs a credential: the API key, or the client id and secret for OAuth 2.0.</summary>
+        public bool RequiresCredential => IsConfigured && Provider != AiProvider.Ollama;
+
+        /// <summary>Whether the harness authenticates with an OAuth 2.0 access token instead of an API key.</summary>
+        public bool UsesOAuth => IsConfigured && AuthMethod == AiAuthMethod.OAuth2ClientCredentials;
+
+        /// <summary>Whether the provider needs an API key: a credential, used without OAuth 2.0.</summary>
+        public bool RequiresApiKey => RequiresCredential && !UsesOAuth;
 
         /// <summary>
         /// Returns the compaction reserve in effect: <see cref="CompactionReserveTokens"/>, or a quarter of the context
@@ -154,10 +186,12 @@ namespace FWO.Data.Ai
         {
             ArgumentNullException.ThrowIfNull(configValues);
             AiSettings settings = new();
-            settings.Provider = ReadProvider(configValues, settings.Provider);
+            settings.Provider = ReadEnum(configValues, kProviderKey, settings.Provider);
             settings.Model = ReadText(configValues, kModelKey);
             settings.Endpoint = ReadText(configValues, kEndpointKey);
             settings.CredentialId = ReadNumber(configValues, kCredentialIdKey, settings.CredentialId);
+            settings.AuthMethod = ReadEnum(configValues, kAuthMethodKey, settings.AuthMethod);
+            settings.TokenUrl = ReadText(configValues, kTokenUrlKey);
             settings.ContextWindowTokens = ReadNumber(configValues, kContextWindowTokensKey, settings.ContextWindowTokens);
             settings.MaxOutputTokens = ReadNumber(configValues, kMaxOutputTokensKey, settings.MaxOutputTokens);
             settings.MaxIterationsPerRequest = ReadNumber(configValues, kMaxIterationsPerRequestKey, settings.MaxIterationsPerRequest);
@@ -182,19 +216,58 @@ namespace FWO.Data.Ai
             {
                 problems.Add(AiSettingsProblem.ModelMissing);
             }
-            if (RequiresApiKey && CredentialId <= 0)
+            if (RequiresCredential && CredentialId <= 0)
             {
                 problems.Add(AiSettingsProblem.CredentialMissing);
             }
             AddEndpointProblem(problems);
+            AddOAuthProblems(problems);
             AddTokenLimitProblems(problems);
             AddAgentLoopProblems(problems);
             return problems;
         }
 
         /// <summary>
+        /// Adds the problems of OAuth 2.0, if it is used: only for an OpenAI compatible server, which needs an endpoint,
+        /// and with a token URL that is absolute and uses https unless it is a loopback address, as the client secret is
+        /// sent to it.
+        /// </summary>
+        private void AddOAuthProblems(List<AiSettingsProblem> problems)
+        {
+            if (!UsesOAuth)
+            {
+                return;
+            }
+            if (Provider != AiProvider.OpenAi)
+            {
+                problems.Add(AiSettingsProblem.OAuthNotSupported);
+            }
+            if (string.IsNullOrWhiteSpace(Endpoint))
+            {
+                problems.Add(AiSettingsProblem.OAuthEndpointMissing);
+            }
+            if (!IsSecretSafeUrl(TokenUrl))
+            {
+                problems.Add(AiSettingsProblem.TokenUrlInvalid);
+            }
+        }
+
+        /// <summary>
+        /// Tells whether a URL a secret may be sent to is an absolute https URL, or an http URL of a loopback address.
+        /// </summary>
+        private static bool IsSecretSafeUrl(string url)
+        {
+            bool isAbsolute = Uri.TryCreate(url.Trim(), UriKind.Absolute, out Uri? uri);
+            if (!isAbsolute || uri == null)
+            {
+                return false;
+            }
+            return uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback);
+        }
+
+        /// <summary>
         /// Adds the problem of the endpoint, if any: it must be an absolute http or https URL, and must use https
-        /// unless it is a loopback address if the API key is sent to it.
+        /// unless it is a loopback address if a secret (the API key or the access token) is sent to it.
         /// </summary>
         private void AddEndpointProblem(List<AiSettingsProblem> problems)
         {
@@ -207,7 +280,7 @@ namespace FWO.Data.Ai
             {
                 problems.Add(AiSettingsProblem.EndpointInvalid);
             }
-            else if (RequiresApiKey && endpoint.Scheme == Uri.UriSchemeHttp && !endpoint.IsLoopback)
+            else if (RequiresCredential && endpoint.Scheme == Uri.UriSchemeHttp && !endpoint.IsLoopback)
             {
                 problems.Add(AiSettingsProblem.EndpointNotSecure);
             }
@@ -252,13 +325,14 @@ namespace FWO.Data.Ai
         }
 
         /// <summary>
-        /// Reads the provider by name, ignoring case; the default for a missing, empty or unknown name.
+        /// Reads an enum value by name, ignoring case; the default for a missing, empty, numeric or unknown name.
         /// </summary>
-        private static AiProvider ReadProvider(IReadOnlyDictionary<string, string?> configValues, AiProvider defaultValue)
+        private static TEnum ReadEnum<TEnum>(IReadOnlyDictionary<string, string?> configValues, string key, TEnum defaultValue)
+            where TEnum : struct, Enum
         {
-            string text = ReadText(configValues, kProviderKey);
-            bool isKnown = Enum.TryParse(text, ignoreCase: true, out AiProvider provider) && Enum.IsDefined(provider);
-            return isKnown && !int.TryParse(text, out _) ? provider : defaultValue;
+            string text = ReadText(configValues, key);
+            bool isKnown = Enum.TryParse(text, ignoreCase: true, out TEnum value) && Enum.IsDefined(value);
+            return isKnown && !int.TryParse(text, out _) ? value : defaultValue;
         }
 
         /// <summary>

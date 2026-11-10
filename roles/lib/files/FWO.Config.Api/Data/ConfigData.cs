@@ -405,6 +405,14 @@ namespace FWO.Config.Api.Data
         [JsonProperty(AiSettings.kCredentialIdKey), JsonPropertyName(AiSettings.kCredentialIdKey)]
         public int AiCredentialId { get; set; } = 0;
 
+        /// <summary>Authentication at the AI provider, see <see cref="AiSettings.AuthMethod"/>.</summary>
+        [JsonProperty(AiSettings.kAuthMethodKey), JsonPropertyName(AiSettings.kAuthMethodKey)]
+        public AiAuthMethod AiAuthMethod { get; set; } = AiAuthMethod.ApiKey;
+
+        /// <summary>Token URL of OAuth 2.0, see <see cref="AiSettings.TokenUrl"/>.</summary>
+        [JsonProperty(AiSettings.kTokenUrlKey), JsonPropertyName(AiSettings.kTokenUrlKey)]
+        public string AiTokenUrl { get; set; } = "";
+
         /// <summary>Context window of the AI model, see <see cref="AiSettings.ContextWindowTokens"/>.</summary>
         [JsonProperty(AiSettings.kContextWindowTokensKey), JsonPropertyName(AiSettings.kContextWindowTokensKey)]
         public int AiContextWindowTokens { get; set; } = 0;

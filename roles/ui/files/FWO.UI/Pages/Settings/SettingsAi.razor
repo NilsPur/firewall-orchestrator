@@ -38,6 +38,26 @@
             <input id="aiEndpoint" type="url" class="form-control form-control-sm" maxlength="@kMaxEndpointLength" @bind="aiSettings.Endpoint" />
         </div>
     </div>
+    <div class="form-group row mt-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5382"))">
+        <label for="aiAuthMethod" class="col-sm-3 col-form-label col-form-label-sm">@(userConfig.GetText("ai_auth_method")):</label>
+        <div class="col-sm-4">
+            <select id="aiAuthMethod" class="form-control form-control-sm" @bind="aiSettings.AuthMethod">
+                @foreach (KeyValuePair<AiAuthMethod, string> authMethod in kAuthMethodTextKeys)
+                {
+                    <option value="@authMethod.Key">@(userConfig.GetText(authMethod.Value))</option>
+                }
+            </select>
+        </div>
+    </div>
+    @if (aiSettings.AuthMethod == AiAuthMethod.OAuth2ClientCredentials)
+    {
+        <div class="form-group row mt-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5383"))">
+            <label for="aiTokenUrl" class="col-sm-3 col-form-label col-form-label-sm">@(userConfig.GetText("ai_token_url"))*:</label>
+            <div class="col-sm-8">
+                <input id="aiTokenUrl" type="url" class="form-control form-control-sm" maxlength="@kMaxEndpointLength" @bind="aiSettings.TokenUrl" />
+            </div>
+        </div>
+    }
     <div class="form-group row mt-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5374"))">
         <label for="aiCredential" class="col-sm-3 col-form-label col-form-label-sm">@(userConfig.GetText("ai_credential")):</label>
         <div class="col-sm-8">
@@ -110,12 +130,19 @@
 
     private static readonly List<AiProvider> kProviders = [.. Enum.GetValues<AiProvider>()];
 
+    private static readonly Dictionary<AiAuthMethod, string> kAuthMethodTextKeys = new()
+    {
+        [AiAuthMethod.ApiKey] = "ai_auth_api_key",
+        [AiAuthMethod.OAuth2ClientCredentials] = "ai_auth_oauth2_client_credentials"
+    };
+
     private ConfigData? editableConfig;
     private AiSettings aiSettings = new();
     private List<Credential> credentials = [];
 
     /// <summary>
-    /// Loads the AI settings and the credentials that can hold an API key (no key pairs), without their secrets.
+    /// Loads the AI settings and the credentials that can hold an API key or an OAuth client secret (no key pairs),
+    /// without their secrets.
     /// </summary>
     protected override async Task OnInitializedAsync()
     {

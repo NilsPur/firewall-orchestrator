@@ -1,3 +1,4 @@
+using FWO.Basics.OAuth;
 using FWO.Data.Ai;
 
 namespace FWO.Ai.Harness.Providers;
@@ -15,8 +16,17 @@ public class AiProviderSettings
     /// <summary>Model id, e.g. the model name known to the provider.</summary>
     public string Model { get; set; } = "";
 
-    /// <summary>API key; required for all providers but Ollama. Never logged or put into error messages.</summary>
+    /// <summary>
+    /// API key; required for all providers but Ollama unless <see cref="OAuthClient"/> is set. Never logged or put into
+    /// error messages.
+    /// </summary>
     public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// Client credentials of OAuth 2.0: if set, the access token they get is sent as bearer token instead of an API key.
+    /// For <see cref="AiProvider.OpenAi"/> with an <see cref="Endpoint"/> only.
+    /// </summary>
+    public OAuthClientCredentials? OAuthClient { get; set; }
 
     /// <summary>Custom base URL of the provider; the provider's default if not set.</summary>
     public Uri? Endpoint { get; set; }
