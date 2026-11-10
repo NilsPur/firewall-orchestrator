@@ -23,7 +23,7 @@ internal class ResolvePathDevicesRequestValidatorTest
     private const int kNoDesignatedMatrix = 0;
 
     private const string kValidLists =
-        "\"sources\":[{\"ipStart\":\"10.1.0.1\",\"ipEnd\":\"10.1.0.1\"}],\"destinations\":[{\"ipNetwork\":\"10.2.0.0/24\"}]";
+        "\"sources\":[{\"ipHost\":\"10.1.0.1\"}],\"destinations\":[{\"ipNetwork\":\"10.2.0.0/24\"}]";
 
     /// <summary>Verifies a request with only the required keys passes when the defaults are usable.</summary>
     [Test]
@@ -133,14 +133,25 @@ internal class ResolvePathDevicesRequestValidatorTest
     public void Validate_WithInvalidEntries_ReportsEachUnderItsIndex()
     {
         RequestValidationErrorResponse result = Validate(
-            """{"sources":[{"ipNetwork":"10.1.0.0/24"},null],"destinations":[{"ipNetwork":"10.2.0.0/24"},{"ipStart":"10.2.0.9","ipEnd":"10.2.0.1"}]}""");
+            """{"sources":[{"ipNetwork":"10.1.0.0/24"},null],"destinations":[{"ipNetwork":"10.2.0.0/24"},{"ipRange":["10.2.0.9","10.2.0.1"]}]}""");
 
         Assert.Multiple(() =>
         {
             Assert.That(PathsOf(result), Is.EquivalentTo(new List<string> { "sources[1]", "destinations[1]" }));
             Assert.That(MessageAt(result, "sources[1]"), Does.Contain("must be an object"));
-            Assert.That(MessageAt(result, "destinations[1]"), Does.Contain("'ipStart' <= 'ipEnd'"));
+            Assert.That(MessageAt(result, "destinations[1]"),
+                Is.EqualTo("'destinations[1]' must order 'ipRange' from its lower to its upper address."));
         });
+    }
+
+    /// <summary>Verifies the lists accept all three address forms, mixed within one list.</summary>
+    [Test]
+    public void Validate_WithAllAddressFormsMixed_HasNoErrors()
+    {
+        RequestValidationErrorResponse result = Validate(
+            """{"sources":[{"ipHost":"10.1.0.1"},{"ipNetwork":"10.1.0.0/24"},{"ipRange":["10.1.0.10","10.1.0.20"]}],"destinations":[{"ipHost":"2001:db8::1"}]}""");
+
+        Assert.That(result.Errors, Is.Empty);
     }
 
     /// <summary>Verifies the requestable algorithm names are accepted, compared case-insensitively.</summary>
@@ -184,6 +195,28 @@ internal class ResolvePathDevicesRequestValidatorTest
             Assert.That(PathsOf(result), Is.EqualTo(new List<string> { "options.algorithm" }));
             Assert.That(MessageAt(result, "options.algorithm"), Does.StartWith("No default path analysis algorithm is configured."));
         });
+    }
+
+    /// <summary>
+    /// Verifies a configured device selection of the workflow is no usable default either, as it ignores the addresses.
+    /// </summary>
+    [TestCase(GlobalConst.kPathAnalysisAlgorithmForEachDevice)]
+    [TestCase(GlobalConst.kPathAnalysisAlgorithmFirstDevice)]
+    public void Validate_WithoutAlgorithmAndDeviceSelectionDefault_ReportsMissingDefault(long configuredAlgorithmId)
+    {
+        RequestValidationErrorResponse result = Validate(Request(), configuredAlgorithmId);
+
+        Assert.That(MessageAt(result, "options.algorithm"), Does.StartWith("No default path analysis algorithm is configured."));
+    }
+
+    /// <summary>Verifies a device selection cannot be requested explicitly.</summary>
+    [TestCase(PathAnalysisAlgorithmNames.kForEachDevice)]
+    [TestCase(PathAnalysisAlgorithmNames.kFirstDevice)]
+    public void Validate_WithDeviceSelectionAlgorithm_ReportsUnsupportedValue(string algorithm)
+    {
+        RequestValidationErrorResponse result = Validate(WithOptions("{\"algorithm\":\"" + algorithm + "\"}"));
+
+        Assert.That(MessageAt(result, "options.algorithm"), Does.Contain($"unsupported value '{algorithm}'"));
     }
 
     /// <summary>Verifies a configured default of none does not matter when the request names an algorithm.</summary>
@@ -309,7 +342,7 @@ internal class ResolvePathDevicesRequestValidatorTest
     public void Validate_WithManyErrors_ReportsAllTogether()
     {
         RequestValidationErrorResponse result = Validate(
-            """{"sources":[],"destinations":[{"ipNetwork":"10.2.0.5/24"}],"extra":1,"options":{"algorithm":"none","matrixId":0,"filter":{"id":0,"name":""}}}""");
+            """{"sources":[],"destinations":[{"ipHost":"10.2.0.5/24"}],"extra":1,"options":{"algorithm":"none","matrixId":0,"filter":{"id":0,"name":""}}}""");
 
         Assert.That(PathsOf(result), Is.EquivalentTo(new List<string>
         {
@@ -362,6 +395,10 @@ internal class ResolvePathDevicesRequestValidatorTest
         Assert.Multiple(() =>
         {
             Assert.That(sources, Does.Contain(ResolvePathDevicesRequestValidationSchema.kMaximumIpBlocksPerList.ToString()));
+            foreach (RequestKeyDefinition addressKey in AddressInputRequestValidator.Keys)
+            {
+                Assert.That(sources, Does.Contain($"'{addressKey.JsonName}'"));
+            }
             Assert.That(algorithm, Does.Contain(PathAnalysisAlgorithmNames.kNetworkZoneTree));
             Assert.That(matrixId, Does.Contain(PathAnalysisAlgorithmNames.kNetworkZoneTree));
             Assert.That(ResolvePathDevicesRequestValidationSchema.FilterKeys.Select(key => key.JsonName),

@@ -5,6 +5,7 @@ using FWO.Basics.Exceptions;
 using FWO.Config.Api;
 using FWO.Config.File;
 using FWO.Compliance;
+using FWO.Compliance.RulePositioning;
 using FWO.Logging;
 using FWO.Middleware.Server;
 using FWO.Middleware.Server.OpenApi;
@@ -81,6 +82,8 @@ builder.Services.AddSingleton<ComplianceCheckStatusTracker>();
 builder.Services.AddSingleton(tokenLifetimeProvider);
 builder.Services.AddSingleton(internalApiTokenService);
 builder.Services.AddSingleton<INotificationEmailSender, NotificationEmailSender>();
+builder.Services.AddRulePositioning();
+builder.Services.AddSingleton<DeviceSpecificSettingsManager>();
 builder.Services.AddHostedService<InternalApiTokenRefreshService>();
 
 // Register config listeners as singletons (activated at startup)
@@ -96,6 +99,7 @@ builder.Services.AddSingleton<ReportSchedulerService>();
 builder.Services.AddSingleton<ComplianceSchedulerService>();
 builder.Services.AddSingleton<UpdateRuleOwnerMappingSchedulerService>();
 builder.Services.AddSingleton<UpdateFlowsSchedulerService>();
+builder.Services.AddSingleton<RestApiConfigService>();
 
 // Add services to the container.
 builder.Services.AddControllers()
@@ -116,7 +120,8 @@ builder.Services.AddSingleton<JwtWriter>(jwtWriter);
 builder.Services.AddSingleton<List<Ldap>>(connectedLdaps);
 builder.Services.AddSingleton<FlowCatalogService>();
 builder.Services.AddSingleton<IFlowGroupResolver>(serviceProvider => serviceProvider.GetRequiredService<FlowCatalogService>());
-builder.Services.AddSingleton<ComplianceZoneService>();
+builder.Services.AddSingleton<DesignatedZoneMatrixService>();
+builder.Services.AddSingleton<ICreationRuleZoneResolver, CreationRuleZoneResolver>();
 builder.Services.AddSingleton<FlowComplianceService>();
 builder.Services.AddSingleton<WorkflowTicketService>();
 builder.Services.AddSingleton<WorkflowChangeHistoryService>();
@@ -247,6 +252,7 @@ app.Services.GetRequiredService<ReportSchedulerService>();
 app.Services.GetRequiredService<ComplianceSchedulerService>();
 app.Services.GetRequiredService<UpdateRuleOwnerMappingSchedulerService>();
 app.Services.GetRequiredService<UpdateFlowsSchedulerService>();
+app.Services.GetRequiredService<RestApiConfigService>();
 
 await app.RunAsync();
 

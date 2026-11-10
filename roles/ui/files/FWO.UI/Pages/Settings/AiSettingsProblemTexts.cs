@@ -9,15 +9,15 @@ namespace FWO.Ui.Pages.Settings
     {
         private static readonly Dictionary<AiSettingsProblem, string> kTextKeys = new()
         {
-            [AiSettingsProblem.ModelMissing] = "E5302",
-            [AiSettingsProblem.CredentialMissing] = "E5303",
-            [AiSettingsProblem.EndpointInvalid] = "E5304",
-            [AiSettingsProblem.EndpointNotSecure] = "E5305",
-            [AiSettingsProblem.ContextWindowInvalid] = "E5306",
-            [AiSettingsProblem.MaxOutputTokensInvalid] = "E5307",
-            [AiSettingsProblem.MaxIterationsInvalid] = "E5308",
-            [AiSettingsProblem.MaxConsecutiveErrorsInvalid] = "E5309",
-            [AiSettingsProblem.CompactionReserveInvalid] = "E5310"
+            [AiSettingsProblem.ModelMissing] = "E5303",
+            [AiSettingsProblem.CredentialMissing] = "E5304",
+            [AiSettingsProblem.EndpointInvalid] = "E5305",
+            [AiSettingsProblem.EndpointNotSecure] = "E5306",
+            [AiSettingsProblem.ContextWindowInvalid] = "E5307",
+            [AiSettingsProblem.MaxOutputTokensInvalid] = "E5308",
+            [AiSettingsProblem.MaxIterationsInvalid] = "E5309",
+            [AiSettingsProblem.MaxConsecutiveErrorsInvalid] = "E5310",
+            [AiSettingsProblem.CompactionReserveInvalid] = "E5311"
         };
 
         /// <summary>

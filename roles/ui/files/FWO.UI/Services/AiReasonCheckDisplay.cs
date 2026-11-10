@@ -17,7 +17,7 @@ namespace FWO.Ui.Services
         public const string kRunningTextKey = "ai_checking";
 
         /// <summary>Text key of the disclaimer below the answer.</summary>
-        public const string kDisclaimerTextKey = "U9046";
+        public const string kDisclaimerTextKey = "U9048";
 
         /// <summary>Text key of the message for a blank or too long reason.</summary>
         public const string kInvalidReasonTextKey = "E9032";
