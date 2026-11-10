@@ -11,6 +11,9 @@
 - new shared request building block for IP address blocks (`IpRangeOrNetworkRequest`) with the address rules of flow compliance, for reuse by further endpoints
 - UI report scheduling: help text and input tooltip for recipient email addresses now list all supported separators: comma ( , ), semicolon ( ; ) and vertical bar ( | )
 - Refresh-token rotation now behaves predictably under concurrent requests, and an unreachable API during authentication is reported as a retryable 503. Before, it came back as a 400 with the raw transport error.
+- new UI settings page `Settings > AI settings` (admin, auditor read-only): the AI provider, model, endpoint, API key and the agent loop limits of the AI harness are set here. The API key is a credential of the credential store; a credential the AI settings use cannot be deleted
+  - the AI harness reads the settings with its own technical LDAP user `ai-harness` (new technical role `ai-harness`, password in `/usr/local/fworch/etc/secrets/ai_harness_pwd`), which may read only these config items and the one credential they reference (view `v_ai_provider_credential`)
+  - changes apply within `ai_harness_settings_refresh_seconds` (default 30) without a restart; the environment variables `Harness__Provider__*` and `Harness__Agent__*` are no longer read
 - dependencies: update NuGet packages (AngleSharp to 1.8.5, bunit to 2.12.5, PuppeteerSharp to 25.14.0, Quartz to 4.6.0)
 
 ## 9.8.0 - 20.10.2026

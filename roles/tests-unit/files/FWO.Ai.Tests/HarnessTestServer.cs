@@ -41,7 +41,7 @@ internal static class HarnessTestServer
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        return await BuildAndStart(builder, CreateDefaultSettings(settings), _ => HarnessTestSetup.CreateFactory(mcpApp, chatClient));
+        return await BuildAndStart(builder, CreateDefaultSettings(settings), new AgentFactoryHolder(HarnessTestSetup.CreateFactory(mcpApp, chatClient)));
     }
 
     /// <summary>
@@ -52,19 +52,19 @@ internal static class HarnessTestServer
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls(kLoopbackUrlWithFreePort);
-        return await BuildAndStart(builder, CreateDefaultSettings(null), _ => HarnessTestSetup.CreateFactory(mcpApp, chatClient));
+        return await BuildAndStart(builder, CreateDefaultSettings(null), new AgentFactoryHolder(HarnessTestSetup.CreateFactory(mcpApp, chatClient)));
     }
 
     /// <summary>
-    /// Starts the harness server pipeline on Kestrel at a free loopback port with the given settings and agent factory,
-    /// e.g. the factory Program creates from the provider settings. Its address is returned by
+    /// Starts the harness server pipeline on Kestrel at a free loopback port with the given settings and holder of the
+    /// agent factory, e.g. an empty one as Program starts with. Its address is returned by
     /// <see cref="McpTestServer.GetBaseAddress"/>.
     /// </summary>
-    internal static async Task<WebApplication> StartOnLoopback(HarnessSettings settings, Func<IServiceProvider, FwoAgentFactory> createAgentFactory)
+    internal static async Task<WebApplication> StartOnLoopback(HarnessSettings settings, AgentFactoryHolder agentFactories)
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls(kLoopbackUrlWithFreePort);
-        return await BuildAndStart(builder, settings, createAgentFactory);
+        return await BuildAndStart(builder, settings, agentFactories);
     }
 
     /// <summary>
@@ -184,10 +184,10 @@ internal static class HarnessTestServer
     /// Adds the services of the harness server pipeline and starts it.
     /// </summary>
     private static async Task<WebApplication> BuildAndStart(WebApplicationBuilder builder, HarnessSettings settings,
-        Func<IServiceProvider, FwoAgentFactory> createAgentFactory)
+        AgentFactoryHolder agentFactories)
     {
         HarnessServerSetup.AddFwoJwtAuthentication(builder.Services, McpTestServer.PublicKey);
-        HarnessServerSetup.AddFwoAgentServer(builder.Services, settings, createAgentFactory);
+        HarnessServerSetup.AddFwoAgentServer(builder.Services, settings, agentFactories);
 
         WebApplication app = builder.Build();
         HarnessServerSetup.MapFwoAgent(app);

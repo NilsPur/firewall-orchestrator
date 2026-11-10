@@ -1,23 +1,26 @@
+using FWO.Data.Ai;
+
 namespace FWO.Ai.Harness.Agent;
 
 /// <summary>
-/// Settings of the agents created by an <see cref="FwoAgentFactory"/>: agent loop and history compaction.
+/// Settings of the agents created by an <see cref="FwoAgentFactory"/>: agent loop and history compaction, taken from
+/// the AI settings of the UI (see <see cref="Settings.AiRuntimeSettings"/>).
 /// </summary>
 public class AgentSettings
 {
     /// <summary>
-    /// Default maximum number of model requests offering the tools per turn. Lower than the default of
-    /// Microsoft.Extensions.AI (40), to bound the cost of a single turn.
+    /// Default maximum number of model requests offering the tools per turn, see
+    /// <see cref="AiSettings.kDefaultMaxIterationsPerRequest"/>.
     /// </summary>
-    public const int kDefaultMaxIterationsPerRequest = 10;
+    public const int kDefaultMaxIterationsPerRequest = AiSettings.kDefaultMaxIterationsPerRequest;
 
     /// <summary>Default maximum number of consecutive failed tool call rounds before a turn fails.</summary>
-    public const int kDefaultMaxConsecutiveErrorsPerRequest = 3;
+    public const int kDefaultMaxConsecutiveErrorsPerRequest = AiSettings.kDefaultMaxConsecutiveErrorsPerRequest;
 
     /// <summary>
     /// The default compaction reserve is the context window divided by this, i.e. a quarter of the context window.
     /// </summary>
-    public const int kDefaultCompactionReserveDivisor = 4;
+    public const int kDefaultCompactionReserveDivisor = AiSettings.kDefaultCompactionReserveDivisor;
 
     /// <summary>
     /// Maximum number of model requests offering the tools per turn, the initial request included; must be at least 1.

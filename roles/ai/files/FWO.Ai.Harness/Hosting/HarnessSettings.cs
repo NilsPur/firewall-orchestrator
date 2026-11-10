@@ -1,13 +1,13 @@
-using FWO.Ai.Harness.Agent;
-using FWO.Ai.Harness.Providers;
+using FWO.Basics;
 
 namespace FWO.Ai.Harness.Hosting;
 
 /// <summary>
 /// Settings of the harness server, read from the configuration section <see cref="kSectionName"/>: environment
-/// variables (e.g. Harness__Provider__ApiKey for the API key, which never belongs into a file of the sources) and the
-/// command line. A setting that is not given has the default of its property.
-/// A class rather than a record on purpose: the provider settings hold the API key.
+/// variables (e.g. Harness__McpEndpoint, set by the installer in the systemd unit) and the command line. A setting that
+/// is not given has the default of its property. The AI provider, the model, the API key and the agent loop are not
+/// part of them: they are edited on the AI settings page of the UI and read from the API by the harness itself, with its
+/// technical user (see <see cref="Settings.AiSettingsRefresher"/>).
 /// </summary>
 public class HarnessSettings
 {
@@ -34,6 +34,23 @@ public class HarnessSettings
     /// <summary>Largest maximum request body size that may be configured (64 MiB).</summary>
     public const long kMaxRequestBodyBytesLimit = 64L * 1024 * 1024;
 
+    /// <summary>
+    /// Default technical user of the harness, holding the role <see cref="Roles.AiHarness"/>; see ai_harness_user_name
+    /// in the installer inventory.
+    /// </summary>
+    public const string kDefaultTechnicalUser = "ai-harness";
+
+    /// <summary>
+    /// Default file holding the password of the technical user; see ai_harness_password_file in the installer inventory.
+    /// </summary>
+    public const string kDefaultTechnicalUserPasswordFile = GlobalConst.kFwoBaseDir + "/etc/secrets/ai_harness_pwd";
+
+    /// <summary>Default interval in seconds after which the AI settings are read again.</summary>
+    public const int kDefaultSettingsRefreshSeconds = 30;
+
+    /// <summary>Longest interval in seconds that may be configured for reading the AI settings again (one hour).</summary>
+    public const int kMaxSettingsRefreshSeconds = 3600;
+
     private const string kMcpEndpointPurpose = "MCP endpoint";
 
     /// <summary>
@@ -57,11 +74,20 @@ public class HarnessSettings
     /// </summary>
     public long MaxRequestBodyBytes { get; set; } = kDefaultMaxRequestBodyBytes;
 
-    /// <summary>AI provider, model, credentials and context window; checked when the agent factory is created.</summary>
-    public AiProviderSettings Provider { get; set; } = new();
+    /// <summary>
+    /// Technical user the harness logs in to the middleware server with, to read the AI settings and the credential of
+    /// the API key. It must hold the role <see cref="Roles.AiHarness"/> only, which may read nothing else.
+    /// </summary>
+    public string TechnicalUser { get; set; } = kDefaultTechnicalUser;
 
-    /// <summary>Agent loop and compaction; checked when the agent factory is created.</summary>
-    public AgentSettings Agent { get; set; } = new();
+    /// <summary>File holding the password of the <see cref="TechnicalUser"/>; read at every login, never logged.</summary>
+    public string TechnicalUserPasswordFile { get; set; } = kDefaultTechnicalUserPasswordFile;
+
+    /// <summary>
+    /// Interval in seconds after which the AI settings are read again, i.e. how long a change on the AI settings page
+    /// takes to apply at most. Must be positive and at most <see cref="kMaxSettingsRefreshSeconds"/>.
+    /// </summary>
+    public int SettingsRefreshSeconds { get; set; } = kDefaultSettingsRefreshSeconds;
 
     /// <summary>
     /// Reads and checks the settings of the harness server.
@@ -77,7 +103,7 @@ public class HarnessSettings
     }
 
     /// <summary>
-    /// Checks the settings of the server; the provider and agent settings are checked by the agent factory.
+    /// Checks the settings of the server.
     /// </summary>
     /// <exception cref="ArgumentException">A setting of the server is invalid.</exception>
     internal void Validate()
@@ -92,5 +118,9 @@ public class HarnessSettings
         {
             ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(connectionTimeout, TimeSpan.Zero);
         }
+        ArgumentException.ThrowIfNullOrWhiteSpace(TechnicalUser);
+        ArgumentException.ThrowIfNullOrWhiteSpace(TechnicalUserPasswordFile);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(SettingsRefreshSeconds);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(SettingsRefreshSeconds, kMaxSettingsRefreshSeconds);
     }
 }

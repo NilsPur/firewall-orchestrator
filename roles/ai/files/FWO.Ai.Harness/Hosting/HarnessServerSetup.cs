@@ -45,21 +45,22 @@ internal static class HarnessServerSetup
     }
 
     /// <summary>
-    /// Adds the services of the AG-UI server: the agent factory and the rate limiting. The server is stateless: no
-    /// session store is registered, so the AG-UI hosting runs each request on a session of its own, and the client sends
-    /// the whole conversation with every run (see <see cref="TurnInput"/>).
+    /// Adds the services of the AG-UI server: the holder of the agent factory and the rate limiting. The server is
+    /// stateless: no session store is registered, so the AG-UI hosting runs each request on a session of its own, and the
+    /// client sends the whole conversation with every run (see <see cref="TurnInput"/>).
     /// </summary>
     /// <param name="services">Services of the harness server</param>
     /// <param name="settings">Settings of the harness server</param>
-    /// <param name="createAgentFactory">Creates the agent factory, which the service provider disposes at shutdown. It is
-    /// called by the first run, and again by the next run as long as it throws, e.g. while no AI provider is configured.</param>
+    /// <param name="agentFactories">Holder of the agent factory of the current AI settings, which the service provider
+    /// disposes at shutdown; filled by the settings refresh (see <see cref="HarnessSettingsRefreshSetup"/>), or by a test</param>
     public static IServiceCollection AddFwoAgentServer(this IServiceCollection services, HarnessSettings settings,
-        Func<IServiceProvider, FwoAgentFactory> createAgentFactory)
+        AgentFactoryHolder agentFactories)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(createAgentFactory);
+        ArgumentNullException.ThrowIfNull(agentFactories);
         services.AddSingleton(settings);
-        services.AddSingleton(createAgentFactory);
+        // registered by a factory, as the service provider only disposes the singletons it created
+        services.AddSingleton(_ => agentFactories);
         services.AddAGUIServer();
         services.AddFwoHarnessRateLimiting(settings.RunsPerMinute, settings.MaxConcurrentRunsPerUser);
         return services;
@@ -69,8 +70,8 @@ internal static class HarnessServerSetup
     /// Maps the AG-UI endpoint at <see cref="kAgUiPath"/>, reachable only with a valid JWT of a user holding an FWO user
     /// role, rate limited per user, with a limited number of runs per user at a time and a limited request body size
     /// (<see cref="HarnessSettings.MaxRequestBodyBytes"/>). Each request runs the agent of the calling user, which calls
-    /// the MCP server with the JWT of the request. The agent factory is only created by the first run, so the server starts without a configured
-    /// AI provider; until one is configured, every run fails with the exception of the factory.
+    /// the MCP server with the JWT of the request. The server starts without AI settings; while none are in effect, e.g.
+    /// as no AI provider is configured, every run fails with the reason of the <see cref="AgentFactoryHolder"/> (500).
     /// </summary>
     public static WebApplication MapFwoAgent(this WebApplication app)
     {
@@ -78,7 +79,7 @@ internal static class HarnessServerSetup
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseRateLimiter();
-        app.MapAGUIServer(kAgUiPath, context => SelectUserAgent(context, context.RequestServices.GetRequiredService<FwoAgentFactory>(), settings))
+        app.MapAGUIServer(kAgUiPath, context => SelectUserAgent(context, context.RequestServices.GetRequiredService<AgentFactoryHolder>(), settings))
             .RequireAuthorization()
             .RequireRateLimiting(HarnessRateLimiting.kRunPolicy)
             .WithMetadata(new RequestSizeLimitAttribute(settings.MaxRequestBodyBytes));
@@ -87,22 +88,27 @@ internal static class HarnessServerSetup
 
     /// <summary>
     /// Creates the agent of the calling user, calling the MCP server with the bearer token of the request, which the
-    /// authorization has validated. Returns null, i.e. 404, for a request without bearer token.
+    /// authorization has validated. The agent factory of the current AI settings is leased until the response has
+    /// ended, so that a change of the settings does not dispose it during the run. Returns null, i.e. 404, for a request
+    /// without bearer token.
     /// </summary>
-    internal static AIAgent? SelectUserAgent(HttpContext context, FwoAgentFactory agentFactory, HarnessSettings settings)
+    /// <exception cref="InvalidOperationException">No AI settings are in effect, see <see cref="AgentFactoryHolder.UnavailableReason"/>.</exception>
+    internal static AIAgent? SelectUserAgent(HttpContext context, AgentFactoryHolder agentFactories, HarnessSettings settings)
     {
         string? accessToken = GetBearerToken(context.Request);
         if (accessToken == null)
         {
             return null;
         }
+        AgentFactoryLease lease = agentFactories.Acquire();
+        context.Response.RegisterForDispose(lease);
         McpConnectionSettings userConnection = new()
         {
             Endpoint = settings.McpEndpoint,
             AccessTokenProvider = _ => ValueTask.FromResult(accessToken),
             ConnectionTimeout = settings.McpConnectionTimeout
         };
-        return agentFactory.CreateUserAgent(userConnection);
+        return lease.Factory.CreateUserAgent(userConnection);
     }
 
     /// <summary>

@@ -24,6 +24,7 @@ internal class FwoUserPolicyTest
     [TestCase(Roles.MiddlewareServer, false)]
     [TestCase(Roles.Importer, false)]
     [TestCase(Roles.DbBackup, false)]
+    [TestCase(Roles.AiHarness, false)]
     public async Task CreateBuilder_AuthorizesUserRolesOnly(string role, bool expectedAuthorized)
     {
         ClaimsPrincipal user = CreateUser(kAuthenticationType, JwtClaimTypes.kRole, role);

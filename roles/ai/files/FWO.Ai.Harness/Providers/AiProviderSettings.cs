@@ -1,12 +1,15 @@
+using FWO.Data.Ai;
+
 namespace FWO.Ai.Harness.Providers;
 
 /// <summary>
-/// Settings of the AI provider and model to use.
+/// Settings of the AI provider and model to use, taken from the AI settings of the UI (see
+/// <see cref="Settings.AiRuntimeSettings"/>).
 /// A class rather than a record on purpose: the generated ToString of a record would print the API key.
 /// </summary>
 public class AiProviderSettings
 {
-    /// <summary>Provider to talk to.</summary>
+    /// <summary>Provider to talk to; <see cref="AiProvider.None"/> is refused when the chat client is created.</summary>
     public AiProvider Provider { get; set; }
 
     /// <summary>Model id, e.g. the model name known to the provider.</summary>

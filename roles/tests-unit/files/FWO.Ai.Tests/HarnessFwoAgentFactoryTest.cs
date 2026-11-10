@@ -2,6 +2,7 @@ using FWO.Ai.Harness.Agent;
 using FWO.Ai.Harness.Mcp;
 using FWO.Ai.Harness.Providers;
 using FWO.Ai.Mcp;
+using FWO.Data.Ai;
 using FWO.Basics;
 using Microsoft.Agents.AI;
 using Microsoft.AspNetCore.Builder;

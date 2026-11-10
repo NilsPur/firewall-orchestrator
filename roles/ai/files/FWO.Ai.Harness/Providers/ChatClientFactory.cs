@@ -1,4 +1,5 @@
 using Anthropic;
+using FWO.Data.Ai;
 using Google.GenAI.Types;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
@@ -46,6 +47,10 @@ public static class ChatClientFactory
         if (!Enum.IsDefined(settings.Provider))
         {
             throw new ArgumentException("Unknown AI provider.", nameof(settings));
+        }
+        if (settings.Provider == AiProvider.None)
+        {
+            throw new ArgumentException("No AI provider is configured.", nameof(settings));
         }
         if (string.IsNullOrWhiteSpace(settings.Model))
         {

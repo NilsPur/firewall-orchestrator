@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\lib\files\FWO.Config.File\FWO.Config.File.csproj" />
+    <ProjectReference Include="..\..\..\lib\files\FWO.Encryption\FWO.Encryption.csproj" />
+    <ProjectReference Include="..\..\..\lib\files\FWO.Middleware.Client\FWO.Middleware.Client.csproj" />
   </ItemGroup>
 
 </Project>

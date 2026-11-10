@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using FWO.Basics;
 using FWO.Data;
+using FWO.Data.Ai;
 using FWO.Data.Modelling;
 using FWO.Data.Workflow;
 using FWO.Data.Enums;
@@ -344,6 +345,42 @@ namespace FWO.Config.Api.Data
         /// </summary>
         [JsonProperty("modAiReasonCheck"), JsonPropertyName("modAiReasonCheck")]
         public bool ModAiReasonCheck { get; set; } = false;
+
+        /// <summary>AI provider of the AI harness, see <see cref="AiSettings.Provider"/>.</summary>
+        [JsonProperty(AiSettings.kProviderKey), JsonPropertyName(AiSettings.kProviderKey)]
+        public AiProvider AiProvider { get; set; } = AiProvider.None;
+
+        /// <summary>AI model, see <see cref="AiSettings.Model"/>.</summary>
+        [JsonProperty(AiSettings.kModelKey), JsonPropertyName(AiSettings.kModelKey)]
+        public string AiModel { get; set; } = "";
+
+        /// <summary>Custom base URL of the AI provider, see <see cref="AiSettings.Endpoint"/>.</summary>
+        [JsonProperty(AiSettings.kEndpointKey), JsonPropertyName(AiSettings.kEndpointKey)]
+        public string AiEndpoint { get; set; } = "";
+
+        /// <summary>Credential holding the API key of the AI provider, see <see cref="AiSettings.CredentialId"/>.</summary>
+        [JsonProperty(AiSettings.kCredentialIdKey), JsonPropertyName(AiSettings.kCredentialIdKey)]
+        public int AiCredentialId { get; set; } = 0;
+
+        /// <summary>Context window of the AI model, see <see cref="AiSettings.ContextWindowTokens"/>.</summary>
+        [JsonProperty(AiSettings.kContextWindowTokensKey), JsonPropertyName(AiSettings.kContextWindowTokensKey)]
+        public int AiContextWindowTokens { get; set; } = 0;
+
+        /// <summary>Maximum number of output tokens, see <see cref="AiSettings.MaxOutputTokens"/>.</summary>
+        [JsonProperty(AiSettings.kMaxOutputTokensKey), JsonPropertyName(AiSettings.kMaxOutputTokensKey)]
+        public int AiMaxOutputTokens { get; set; } = 0;
+
+        /// <summary>Maximum number of model requests per turn, see <see cref="AiSettings.MaxIterationsPerRequest"/>.</summary>
+        [JsonProperty(AiSettings.kMaxIterationsPerRequestKey), JsonPropertyName(AiSettings.kMaxIterationsPerRequestKey)]
+        public int AiMaxIterationsPerRequest { get; set; } = AiSettings.kDefaultMaxIterationsPerRequest;
+
+        /// <summary>Maximum number of consecutive failed tool call rounds, see <see cref="AiSettings.MaxConsecutiveErrorsPerRequest"/>.</summary>
+        [JsonProperty(AiSettings.kMaxConsecutiveErrorsPerRequestKey), JsonPropertyName(AiSettings.kMaxConsecutiveErrorsPerRequestKey)]
+        public int AiMaxConsecutiveErrorsPerRequest { get; set; } = AiSettings.kDefaultMaxConsecutiveErrorsPerRequest;
+
+        /// <summary>Compaction reserve of the agent, see <see cref="AiSettings.CompactionReserveTokens"/>.</summary>
+        [JsonProperty(AiSettings.kCompactionReserveTokensKey), JsonPropertyName(AiSettings.kCompactionReserveTokensKey)]
+        public int AiCompactionReserveTokens { get; set; } = 0;
 
         [JsonProperty("overviewDisplayLines"), JsonPropertyName("overviewDisplayLines")]
         public int OverviewDisplayLines { get; set; } = 3;

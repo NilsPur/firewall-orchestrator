@@ -192,22 +192,63 @@ The AG-UI hosting packages are only published as previews.
 
 ## Settings
 
-The settings are read from the configuration section `Harness`: environment variables (e.g.
-`Harness__Provider__ApiKey`) and the command line. The API key must never be put into a file of the sources. The server
-refuses to start with invalid server settings (the settings below other than `Provider` and `Agent`). The `Provider`
-and `Agent` settings are checked when the agent factory is created, which is done by the first run, not at startup:
-the server starts without a configured AI provider, and every run fails with the exception of the factory (HTTP 500,
-logged by the harness) until one is configured.
+The harness has two kinds of settings:
+
+- **Server settings** are read at startup from the configuration section `Harness`: environment variables (e.g.
+  `Harness__McpEndpoint`) and the command line. The server refuses to start if they are invalid.
+- **AI settings** (provider and agent loop) are set by an admin on the AI settings page of the UI (`Settings > AI
+  settings`, `/settings/ai`) and stored as global config items. The API key is a credential of the credential store
+  (`Settings > Credentials`), which the AI settings reference. The harness reads them at startup and again every
+  `SettingsRefreshSeconds`, so a change applies without a restart.
+
+Server settings:
 
 - `McpEndpoint` (default `http://127.0.0.1:8890/mcp`, the MCP server on the same host), `McpConnectionTimeout`
   (optional), `RunsPerMinute`, `MaxConcurrentRunsPerUser` and `MaxRequestBodyBytes`, see above.
-- `Provider` (`AiProviderSettings`): `Provider` (`Ollama`, `OpenAi`, `Anthropic`, `Google`), `Model`, `ApiKey`
-  (required except for Ollama), `Endpoint` (optional base URL, e.g. an OpenAI compatible server; Ollama defaults to
-  `http://localhost:11434`), `MaxOutputTokens` (optional, must be smaller than the context window) and
-  `ContextWindowTokens` (required: the context window of the model).
-- `Agent` (`AgentSettings`): `MaxIterationsPerRequest`, `MaxConsecutiveErrorsPerRequest` and `CompactionReserveTokens`
-  (optional, default a quarter of the context window; must be smaller than the context window and larger than
-  `MaxOutputTokens` if that is set)
+- `TechnicalUser` (default `ai-harness`) and `TechnicalUserPasswordFile` (default
+  `/usr/local/fworch/etc/secrets/ai_harness_pwd`): the technical user the harness reads the AI settings with, see
+  [Reading the AI settings](#reading-the-ai-settings).
+- `SettingsRefreshSeconds` (default 30, at most 3600): time between two readings of the AI settings.
+
+AI settings (`FWO.Data.Ai.AiSettings`, config keys in `AiSettings.kKeys`):
+
+| Setting | Config key | Meaning |
+|---|---|---|
+| Provider | `aiProvider` | `None` (default, the agent is not available), `Ollama`, `OpenAi`, `Anthropic`, `Google` |
+| Model | `aiModel` | Model id known to the provider; required |
+| Endpoint | `aiEndpoint` | Optional base URL, e.g. of an OpenAI compatible server; Ollama defaults to `http://localhost:11434`. Must be https if an API key is sent to a host other than the local one |
+| API key | `aiCredentialId` | Id of the credential holding the API key as its secret; required except for Ollama. Key pairs are not offered |
+| Context window | `aiContextWindowTokens` | Context window of the model in tokens; required |
+| Max output tokens | `aiMaxOutputTokens` | 0 for the provider's default; must be smaller than the context window |
+| Max iterations | `aiMaxIterationsPerRequest` | Model requests per user turn (default 10), see [Agent loop](#agent-loop) |
+| Max consecutive errors | `aiMaxConsecutiveErrorsPerRequest` | Failed tool call rounds in a row before a turn fails (default 3) |
+| Compaction reserve | `aiCompactionReserveTokens` | 0 for a quarter of the context window; must be smaller than the context window and larger than the max output tokens if those are set |
+
+The settings page checks the settings the way the harness does (`AiSettings.Validate`) and does not store invalid ones.
+The harness checks them again when it reads them: without a provider, or with settings it cannot use, every run fails
+with HTTP 500 and the reason is logged once per change (e.g. a missing credential), never with the API key. If the
+settings cannot be read at all, e.g. while the API is not reachable, the last usable settings stay in effect.
+
+### Reading the AI settings
+
+The harness reads the AI settings with its own identity, the technical LDAP user `ai-harness` with the technical role
+`ai-harness` (`Roles.AiHarness`):
+
+- `MiddlewareTechnicalUserLogin` logs it in at the middleware server on the same host (`AuthenticationToken/GetTokenPair`,
+  `ConfigFile.MiddlewareServerNativeUri`) with the password from `TechnicalUserPasswordFile`, which is read at every
+  login. `FwoAiConfigReader` keeps the token until two minutes before it expires and renews it with the refresh token,
+  or by a new login.
+- With that token it reads the global config items of `AiSettings.kKeys` (`ai/getAiSettings.graphql`) and the
+  credential they reference from the view `v_ai_provider_credential` (`ai/getAiProviderCredential.graphql`).
+  `FwoAiSettingsSource` decrypts its secret with the main key of the host (`AesEnc.GetMainKey`).
+- `AiSettingsRefresher` creates a new agent factory when the settings, or the API key, have changed.
+  `AgentFactoryHolder` hands the current factory to each run; a replaced factory is disposed when the last run using it
+  has ended. `AiSettingsRefreshService` runs the refresher in the background.
+
+The role `ai-harness` may only read the global config items of `AiSettings.kKeys` and the view
+`v_ai_provider_credential` (`roles/database/files/sql/idempotent/fworch-ai.sql`), which returns the one credential the
+config item `aiCredentialId` names. It cannot read any other credential or config item, nor change anything. Being a
+technical role, it is refused by the AG-UI endpoint and the MCP server (`Roles.IsTechnicalOrAnonymous`).
 
 The JWT public key is read from the FWO config file (`ConfigFile.JwtPublicKey`), like by the MCP server.
 
@@ -220,6 +261,8 @@ The JWT public key is read from the FWO config file (`ConfigFile.JwtPublicKey`),
 - The AG-UI input of a client never reaches the AI provider unfiltered: the agent passes only the kept conversation, the
   new input and the user's tools on, never system or developer messages or options of the client.
 - A JWT or an API key is only sent over https, or over http to a loopback address.
+- The API key is stored encrypted in the credential store and never in the environment of the service. The harness
+  reads it with a technical user that can read this one credential only, and keeps it in memory; it is not logged.
 - Exception details of failed tool calls are not passed on to the model, and run errors not to the client.
 - Tools that are not marked read-only need an approval answer before they run. The harness takes the answer, and the
   call it names, from the client: the client acts for the user with the user's JWT, which bounds what the call can do.
@@ -237,8 +280,13 @@ host and runs it as the service `fworch-ai-harness` (`roles/ai/templates/fworch-
   of the middleware publishes the AG-UI endpoint under the same path (`ai_harness_agui_path`, `/agui`):
   `https://<middleware host>:8888/agui`. Keep `ai_harness_agui_path` in step with `HarnessServerSetup.kAgUiPath`.
 - The unit sets `McpEndpoint` to `ai_mcp_native_mcp_uri` (`Harness__McpEndpoint`), the MCP server the installer deploys.
-- The installer does not configure the AI provider (`Provider`), so runs fail until one is configured, see
+- The installer does not configure the AI provider, so runs fail until an admin sets it on the AI settings page, see
   [Settings](#settings).
+- The installer creates the technical LDAP user `ai-harness` (`ai_harness_user_dn`, in `tree_operators.ldif.j2` and the
+  9.8.1 LDAP upgrade) with a random password in `ai_harness_password_file` (`/usr/local/fworch/etc/secrets/ai_harness_pwd`,
+  readable by the fworch user only), and sets it in LDAP on every run (`roles/middleware/tasks/set_ai_harness_password.yml`).
+  The unit passes the user, the file and `ai_harness_settings_refresh_seconds` (`Harness__TechnicalUser`,
+  `Harness__TechnicalUserPasswordFile`, `Harness__SettingsRefreshSeconds`).
 - Like the MCP server, the unit hides the JWT signing key of the middleware (`InaccessiblePaths`).
 - An uninstallation stops the service and removes its unit and files. Setting `install_ai_server=no` on an existing
   installation only removes `/agui` from the Apache vhost.
@@ -251,6 +299,9 @@ AG-UI endpoint on a second test server (`HarnessServerTest`). `HarnessTurnInputT
 and `HarnessConversationSnapshotTest` test what a run takes from the conversation, what it sends to the provider and
 what it returns. A strict mode of the scripted chat client rejects requests the way
 the providers do (`ProviderHistoryRules`).
+`HarnessFwoAiConfigReaderTest`, `HarnessFwoAiSettingsSourceTest`, `HarnessAiSettingsRefresherTest`,
+`HarnessAgentFactoryHolderTest` and `HarnessTechnicalUserLoginTest` test reading and applying the AI settings;
+`AiHarnessAccessGuardTest` in FWO.Test checks the Hasura permissions of the role `ai-harness`.
 `ClientHarnessTest` runs the chat client of the UI (`FWO.Ai.Client`, see [AI client](ai-client.md)) against the same
 endpoint, over several runs of a conversation and through an interrupt. Because they reference the harness sources,
 the installer copies `FWO.Ai.Harness` to the middleware host next to `FWO.Ai.Mcp` (`roles/ai`).

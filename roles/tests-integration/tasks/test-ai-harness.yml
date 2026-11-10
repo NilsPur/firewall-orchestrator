@@ -126,6 +126,111 @@
         ca_path: "{{ internalca_trust_bundle }}"
       changed_when: false
 
+    - name: read the state of the password file of the ai harness user
+      stat:
+        path: "{{ ai_harness_password_file }}"
+      register: ai_harness_password_file_state
+      become: true
+
+    - name: the password file of the ai harness user must be readable by the fworch user only
+      assert:
+        that:
+          - ai_harness_password_file_state.stat.exists
+          - ai_harness_password_file_state.stat.mode == '0600'
+          - ai_harness_password_file_state.stat.pw_name == fworch_user
+        fail_msg: "{{ ai_harness_password_file }} is missing or readable by others than {{ fworch_user }}."
+
+    - name: read the password of the ai harness user
+      slurp:
+        src: "{{ ai_harness_password_file }}"
+      register: ai_harness_password_content
+      become: true
+      no_log: true
+
+    - name: the ai harness user must be able to log in
+      ansible.builtin.uri:
+        url: "{{ test_middleware_uri }}api/AuthenticationToken/GetTokenPair/"
+        method: POST
+        status_code: 200
+        body:
+          Username: "{{ ai_harness_user_name }}"
+          Password: "{{ ai_harness_password_content.content | b64decode | trim }}"
+        body_format: json
+        validate_certs: true
+        ca_path: "{{ internalca_trust_bundle }}"
+        return_content: true
+      register: ai_harness_user_token_pair
+      changed_when: false
+      no_log: true
+
+    - name: the ai harness must refuse runs with the token of its technical user
+      ansible.builtin.uri:
+        url: "{{ ai_harness_test_public_uri }}"
+        method: POST
+        status_code: 403
+        headers:
+          Accept: "text/event-stream"
+          Authorization: "Bearer {{ ai_harness_user_token_pair.json.AccessToken }}"
+        body: "{{ ai_harness_test_run }}"
+        body_format: json
+        validate_certs: true
+        ca_path: "{{ internalca_trust_bundle }}"
+      changed_when: false
+      no_log: true
+
+    - name: read config items with the token of the ai harness user
+      ansible.builtin.uri:
+        url: "{{ (test_fwo_config_file.content | b64decode | from_json).api_uri }}"
+        method: POST
+        status_code: 200
+        headers:
+          Authorization: "Bearer {{ ai_harness_user_token_pair.json.AccessToken }}"
+        body:
+          query: >-
+            query { aiItems: config(where: {config_key: {_eq: "aiProvider"}}) { config_key }
+            otherItems: config(where: {config_key: {_eq: "emailPassword"}}) { config_key } }
+        body_format: json
+        validate_certs: true
+        ca_path: "{{ internalca_trust_bundle }}"
+        client_cert: "{{ internalca_client_certificate }}"
+        client_key: "{{ internalca_client_private_key }}"
+        return_content: true
+      register: ai_harness_user_config_items
+      become: true
+      changed_when: false
+      no_log: true
+
+    - name: read the credential table with the token of the ai harness user
+      ansible.builtin.uri:
+        url: "{{ (test_fwo_config_file.content | b64decode | from_json).api_uri }}"
+        method: POST
+        status_code: 200
+        headers:
+          Authorization: "Bearer {{ ai_harness_user_token_pair.json.AccessToken }}"
+        body:
+          query: "query { credential { id } }"
+        body_format: json
+        validate_certs: true
+        ca_path: "{{ internalca_trust_bundle }}"
+        client_cert: "{{ internalca_client_certificate }}"
+        client_key: "{{ internalca_client_private_key }}"
+        return_content: true
+      register: ai_harness_user_credentials
+      become: true
+      changed_when: false
+      no_log: true
+
+    - name: the ai harness user must read the ai items of the config only, and no credential table
+      assert:
+        that:
+          - ai_harness_user_config_items.json.data.aiItems | length == 1
+          - ai_harness_user_config_items.json.data.otherItems | length == 0
+          - ai_harness_user_credentials.json.errors is defined
+          - ai_harness_user_credentials.json.data is not defined
+        fail_msg: >-
+          The role ai-harness reads more than the ai settings: config {{ ai_harness_user_config_items.json | default({}) }},
+          credentials {{ 'readable' if ai_harness_user_credentials.json.data is defined else 'refused' }}.
+
   rescue:
     - name: get ai harness service status
       command: "systemctl status {{ ai_harness_service_name }} --no-pager -l"

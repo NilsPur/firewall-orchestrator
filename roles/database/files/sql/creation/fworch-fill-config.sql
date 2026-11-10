@@ -68,6 +68,15 @@ insert into config (config_key, config_value, config_user) VALUES ('ruleOwnershi
 insert into config (config_key, config_value, config_user) VALUES ('allowServerInConn', 'True', 0);
 insert into config (config_key, config_value, config_user) VALUES ('allowServiceInConn', 'True', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modAiReasonCheck', 'False', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiProvider', 'None', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiModel', '', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiEndpoint', '', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiCredentialId', '0', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiContextWindowTokens', '0', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiMaxOutputTokens', '0', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiMaxIterationsPerRequest', '10', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiMaxConsecutiveErrorsPerRequest', '3', 0);
+insert into config (config_key, config_value, config_user) VALUES ('aiCompactionReserveTokens', '0', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importAppDataStartAt', '00:00:00', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importAppDataSleepTime', '0', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importSubnetDataStartAt', '00:00:00', 0);

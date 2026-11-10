@@ -612,6 +612,14 @@ ai_harness_native_uri: "http://{{ ai_native_listener_address }}:{{ ai_harness_in
 # clients reach the harness: https://<middleware_hostname>:<middleware_web_listener_port>/agui
 ai_harness_agui_path: "/agui"
 ai_harness_native_agui_uri: "http://{{ ai_native_listener_address }}:{{ ai_harness_internal_port }}{{ ai_harness_agui_path }}"
+# The harness reads the ai settings of the ui (provider, model, agent loop) and the credential holding
+# the api key with a technical user of its own (role ai-harness), which may read nothing else. The
+# middleware role creates its random password in this file; the harness logs in with it.
+ai_harness_user_name: "ai-harness"
+ai_harness_user_dn: "uid={{ ai_harness_user_name }},ou=tenant0,ou=operator,ou=user,{{ openldap_path }}"
+ai_harness_password_file: "{{ fworch_secrets_dir }}/ai_harness_pwd"
+# how often (in seconds) the harness reads the ai settings again, i.e. how long a change takes to apply
+ai_harness_settings_refresh_seconds: 30
 
 ###############################################################
 ui_admin_password_file: "{{ fworch_secrets_dir }}/ui_admin_pwd"

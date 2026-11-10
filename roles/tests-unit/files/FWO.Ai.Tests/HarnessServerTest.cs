@@ -430,7 +430,7 @@ internal class HarnessServerTest
         await using WebApplication mcpApp = await McpTestServer.Start();
         ScriptedChatClient chatClient = new();
         HarnessSettings settings = new() { McpEndpoint = HarnessTestSetup.kTestMcpEndpoint, MaxRequestBodyBytes = kSmallBodyLimit };
-        await using WebApplication app = await HarnessTestServer.StartOnLoopback(settings, _ => HarnessTestSetup.CreateFactory(mcpApp, chatClient));
+        await using WebApplication app = await HarnessTestServer.StartOnLoopback(settings, new AgentFactoryHolder(HarnessTestSetup.CreateFactory(mcpApp, chatClient)));
         using HttpClient httpClient = new() { BaseAddress = McpTestServer.GetBaseAddress(app) };
         string oversizedText = new('x', (int)kSmallBodyLimit);
 
@@ -442,33 +442,29 @@ internal class HarnessServerTest
     }
 
     /// <summary>
-    /// Verifies that the server starts without a configured AI provider, with the agent factory Program creates from the
-    /// settings: the factory is only created by a run, which then fails with 500 as long as the factory throws, while
-    /// a request without a token is still rejected with 401 before that.
+    /// Verifies that the server starts without AI settings, as Program does: every run fails with 500 until an agent
+    /// factory is set, while a request without a token is still rejected with 401; once the settings refresh sets a
+    /// factory, the next run is answered.
     /// </summary>
     [Test]
-    public async Task Run_WithoutConfiguredProvider_FailsAfterServerStarted()
+    public async Task Run_WithoutConfiguredProvider_FailsUntilFactoryIsSet()
     {
-        HarnessSettings unconfiguredSettings = new();
-        int factoryCalls = 0;
-        await using WebApplication app = await HarnessTestServer.StartOnLoopback(unconfiguredSettings, _ =>
-        {
-            Interlocked.Increment(ref factoryCalls);
-            return new FwoAgentFactory(unconfiguredSettings.Provider, unconfiguredSettings.Agent);
-        });
+        await using WebApplication mcpApp = await McpTestServer.Start();
+        ScriptedChatClient chatClient = new ScriptedChatClient().RespondWithText(kAnswer);
+        HarnessSettings settings = new() { McpEndpoint = HarnessTestSetup.kTestMcpEndpoint };
+        AgentFactoryHolder agentFactories = new();
+        await using WebApplication app = await HarnessTestServer.StartOnLoopback(settings, agentFactories);
         using HttpClient httpClient = new() { BaseAddress = McpTestServer.GetBaseAddress(app) };
         string accessToken = McpTestServer.CreateMiddlewareToken(Roles.Reporter);
-        int factoryCallsAtStart = factoryCalls;
 
         using HttpResponseMessage withoutToken = await HarnessTestServer.PostRun(httpClient, null, HarnessTestServer.CreateRunBody(kThreadId, kQuestion));
-        using HttpResponseMessage firstRun = await HarnessTestServer.PostRun(httpClient, accessToken, HarnessTestServer.CreateRunBody(kThreadId, kQuestion));
-        using HttpResponseMessage secondRun = await HarnessTestServer.PostRun(httpClient, accessToken, HarnessTestServer.CreateRunBody(kThreadId, kQuestion));
+        using HttpResponseMessage unconfiguredRun = await HarnessTestServer.PostRun(httpClient, accessToken, HarnessTestServer.CreateRunBody(kThreadId, kQuestion));
+        agentFactories.SetFactory(HarnessTestSetup.CreateFactory(mcpApp, chatClient));
+        List<JsonElement> configuredRun = await HarnessTestServer.RunAsync(httpClient, accessToken, kThreadId, kQuestion);
 
-        Assert.That(factoryCallsAtStart, Is.Zero);
         Assert.That(withoutToken.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
-        Assert.That(firstRun.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
-        Assert.That(secondRun.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
-        Assert.That(factoryCalls, Is.EqualTo(2));
+        Assert.That(unconfiguredRun.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+        Assert.That(HarnessTestServer.GetText(configuredRun), Is.EqualTo(kAnswer));
     }
 
     /// <summary>
@@ -527,12 +523,12 @@ internal class HarnessServerTest
     public async Task SelectUserAgent_WithoutBearerToken_ReturnsNull()
     {
         await using WebApplication mcpApp = await McpTestServer.Start();
-        using FwoAgentFactory factory = HarnessTestSetup.CreateFactory(mcpApp, new ScriptedChatClient());
+        using AgentFactoryHolder agentFactories = new(HarnessTestSetup.CreateFactory(mcpApp, new ScriptedChatClient()));
         DefaultHttpContext basicContext = new();
         basicContext.Request.Headers.Authorization = "Basic dXNlcjpwYXNz";
 
-        Assert.That(HarnessServerSetup.SelectUserAgent(new DefaultHttpContext(), factory, new HarnessSettings()), Is.Null);
-        Assert.That(HarnessServerSetup.SelectUserAgent(basicContext, factory, new HarnessSettings()), Is.Null);
+        Assert.That(HarnessServerSetup.SelectUserAgent(new DefaultHttpContext(), agentFactories, new HarnessSettings()), Is.Null);
+        Assert.That(HarnessServerSetup.SelectUserAgent(basicContext, agentFactories, new HarnessSettings()), Is.Null);
     }
 
     /// <summary>

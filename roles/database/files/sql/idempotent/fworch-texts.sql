@@ -635,6 +635,7 @@ INSERT INTO txt VALUES ('whats_new_facts', 'German', '
     <li>Die Auftr&auml;ge &quot;Objekt anlegen&quot; und &quot;Objekt &auml;ndern&quot; unterst&uuml;tzen Zeitobjekte mit Name, Start- und Endzeit.</li>
     <li>Neuer REST-Aufruf <code>resolvePathDevices</code>: ermittelt die Firewalls auf den Pfaden zwischen Quell- und Zieladressen (Bereiche oder Netze, je bis zu 100) mit dem Network-Zone-Tree-Algorithmus. Algorithmus und Zonenmatrix k&ouml;nnen angegeben werden, sonst gelten die Einstellungen. Die Antwort nennt jedes Ger&auml;t einmal sowie den verwendeten Algorithmus und die verwendete Matrix.</li>
     <li>Modellierung: Die fachliche Begr&uuml;ndung einer Verbindung, die Beschreibung einer Schnittstelle oder die Begr&uuml;ndung einer Schnittstellennutzung kann per Schaltfl&auml;che von einer KI bewertet werden (stichhaltig, unzureichend, nicht stichhaltig), mit R&uuml;ckfragen an den Antragsteller und einem Verbesserungsvorschlag. Die Funktion wird in den Modellierungseinstellungen aktiviert und ben&ouml;tigt den KI-Server mit einem konfigurierten KI-Anbieter.</li>
+    <li>KI-Anbieter, Modell, Endpunkt und die Grenzen der Agentenschleife des KI-Servers werden auf der neuen Seite Einstellungen - KI-Einstellungen gepflegt statt &uuml;ber Umgebungsvariablen. Der API-Schl&uuml;ssel wird als Zugangsdaten in der Zugangsdatenverwaltung gespeichert.</li>
     <li>Details: siehe <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">Release Notes.</a></li>
 </ul>
 ');
@@ -668,6 +669,7 @@ INSERT INTO txt VALUES ('whats_new_facts', 'English', '
     <li>The tasks &quot;create object&quot; and &quot;modify object&quot; support time objects with name, start and end time.</li>
     <li>New REST call <code>resolvePathDevices</code>: determines the firewalls on the paths between source and destination addresses (ranges or networks, up to 100 each) using the network zone tree algorithm. Algorithm and zone matrix can be specified, otherwise the settings apply. The response lists each device once together with the algorithm and matrix used.</li>
     <li>Modelling: The functional reason of a connection, the description of an interface or the reason of an interface usage can be assessed by an AI at the push of a button (genuine, insufficient, not genuine), with questions to the requester and a proposal for improvement. The feature is activated in the modelling settings and needs the AI server with a configured AI provider.</li>
+    <li>The AI provider, model, endpoint and the limits of the agent loop of the AI server are maintained on the new page Settings - AI Settings instead of environment variables. The API key is stored as a credential in the credential management.</li>
     <li>Details: see <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">release notes.</a></li>
 </ul>
 ');
@@ -2481,6 +2483,30 @@ INSERT INTO txt VALUES ('password_policy',      'German', 	'Passworteinstellunge
 INSERT INTO txt VALUES ('password_policy',      'English', 	'Password Policy');
 INSERT INTO txt VALUES ('email_settings',       'German', 	'Email-Einstellungen');
 INSERT INTO txt VALUES ('email_settings',       'English', 	'Email settings');
+INSERT INTO txt VALUES ('ai_settings',          'German', 	'KI-Einstellungen');
+INSERT INTO txt VALUES ('ai_settings',          'English', 	'AI Settings');
+INSERT INTO txt VALUES ('ai_provider',          'German', 	'KI-Anbieter');
+INSERT INTO txt VALUES ('ai_provider',          'English', 	'AI provider');
+INSERT INTO txt VALUES ('ai_model',             'German', 	'Modell');
+INSERT INTO txt VALUES ('ai_model',             'English', 	'Model');
+INSERT INTO txt VALUES ('ai_endpoint',          'German', 	'Endpunkt-URL');
+INSERT INTO txt VALUES ('ai_endpoint',          'English', 	'Endpoint URL');
+INSERT INTO txt VALUES ('ai_credential',        'German', 	'Zugangsdaten (API-Schl&uuml;ssel)');
+INSERT INTO txt VALUES ('ai_credential',        'English', 	'Credential (API key)');
+INSERT INTO txt VALUES ('ai_context_window_tokens', 'German', 'Kontextfenster (Tokens)');
+INSERT INTO txt VALUES ('ai_context_window_tokens', 'English', 'Context window (tokens)');
+INSERT INTO txt VALUES ('ai_max_output_tokens', 'German', 	'Max. Ausgabe-Tokens');
+INSERT INTO txt VALUES ('ai_max_output_tokens', 'English', 	'Max. output tokens');
+INSERT INTO txt VALUES ('ai_agent_loop',        'German', 	'Agentenschleife');
+INSERT INTO txt VALUES ('ai_agent_loop',        'English', 	'Agent loop');
+INSERT INTO txt VALUES ('ai_max_iterations',    'German', 	'Max. Modellanfragen pro Frage');
+INSERT INTO txt VALUES ('ai_max_iterations',    'English', 	'Max. model requests per turn');
+INSERT INTO txt VALUES ('ai_max_consecutive_errors', 'German', 'Max. Werkzeugfehler in Folge');
+INSERT INTO txt VALUES ('ai_max_consecutive_errors', 'English', 'Max. consecutive tool errors');
+INSERT INTO txt VALUES ('ai_compaction_reserve_tokens', 'German', 'Reserve f&uuml;r Verlaufsverdichtung (Tokens)');
+INSERT INTO txt VALUES ('ai_compaction_reserve_tokens', 'English', 'Compaction reserve (tokens)');
+INSERT INTO txt VALUES ('save_ai_settings',     'German', 	'KI-Einstellungen speichern');
+INSERT INTO txt VALUES ('save_ai_settings',     'English', 	'Save AI settings');
 INSERT INTO txt VALUES ('importer_settings',    'German', 	'FW-Importer-Einstellungen');
 INSERT INTO txt VALUES ('importer_settings',    'English', 	'FW Importer Settings');
 INSERT INTO txt VALUES ('change_trigger',       'German', 	'FW-&Auml;nderungstrigger-Einstellungen');
@@ -4628,6 +4654,8 @@ INSERT INTO txt VALUES ('U5330', 'German',  'Flow-Datenbank zur&uuml;ckgesetzt.'
 INSERT INTO txt VALUES ('U5330', 'English', 'Flow database reset.');
 INSERT INTO txt VALUES ('U5331', 'German',  'Verwaltung der Internet Einstellungen f&uuml;r alle Nutzer');
 INSERT INTO txt VALUES ('U5331', 'English', 'Administration of internet settings for all users');
+INSERT INTO txt VALUES ('U5332', 'German',  'Verwaltung der Einstellungen des KI-Assistenten f&uuml;r alle Nutzer');
+INSERT INTO txt VALUES ('U5332', 'English', 'Administration of the AI assistant settings for all users');
 
 INSERT INTO txt VALUES ('U5401', 'German',  'Passwort ge&auml;ndert.');
 INSERT INTO txt VALUES ('U5401', 'English', 'Password changed.');
@@ -4906,6 +4934,8 @@ INSERT INTO txt VALUES ('E5128', 'German', 'Zugangsdaten werden von anderen Zuga
 INSERT INTO txt VALUES ('E5128', 'English', 'Credential is used by other credentials');
 INSERT INTO txt VALUES ('E5129', 'German',  'Auf diesem Management werden keine Zeitobjekte angelegt (ger&auml;tespezifische Einstellung &quot;Anlage Zeitobjekte&quot;).');
 INSERT INTO txt VALUES ('E5129', 'English', 'No time objects are created on this management (device specific setting &quot;Time object creation&quot;).');
+INSERT INTO txt VALUES ('E5130', 'German',  'Zugangsdaten werden von den KI-Einstellungen verwendet');
+INSERT INTO txt VALUES ('E5130', 'English', 'Credential is used by the AI settings');
 INSERT INTO txt VALUES ('E5117', 'German',  'L&ouml;schen der Login-Daten nicht m&ouml;glich, da diese von den genannten Managements verwendet werden. Dort zuerst andere Login-Daten ausw&auml;hlen.');
 INSERT INTO txt VALUES ('E5117', 'English', 'Deletion of credentials not allowed as they are in use by the managements named. Change the credentials of these managements before deleting them.');
 INSERT INTO txt VALUES ('E5118', 'German',  'Die obere Grenze muss gr&ouml;sser als die untere Grenze des Portbereichs sein.');
@@ -5052,6 +5082,24 @@ INSERT INTO txt VALUES ('E5298', 'English', 'Duplicate zone patterns cannot be s
 
 INSERT INTO txt VALUES ('E5301', 'German',  'Konfiguration konnte nicht gelesen oder verarbeitet werden.');
 INSERT INTO txt VALUES ('E5301', 'English', 'Error reading or processing Config.');
+INSERT INTO txt VALUES ('E5302', 'German',  'Bitte ein Modell angeben.');
+INSERT INTO txt VALUES ('E5302', 'English', 'Please enter a model.');
+INSERT INTO txt VALUES ('E5303', 'German',  'Dieser KI-Anbieter ben&ouml;tigt Zugangsdaten mit dem API-Schl&uuml;ssel als Passwort.');
+INSERT INTO txt VALUES ('E5303', 'English', 'This AI provider needs a credential with the API key as secret.');
+INSERT INTO txt VALUES ('E5304', 'German',  'Die Endpunkt-URL muss eine absolute http- oder https-URL sein.');
+INSERT INTO txt VALUES ('E5304', 'English', 'The endpoint URL must be an absolute http or https URL.');
+INSERT INTO txt VALUES ('E5305', 'German',  'Der API-Schl&uuml;ssel wird nur &uuml;ber https gesendet, au&szlig;er an eine Loopback-Adresse.');
+INSERT INTO txt VALUES ('E5305', 'English', 'The API key is only sent over https, unless to a loopback address.');
+INSERT INTO txt VALUES ('E5306', 'German',  'Das Kontextfenster muss gr&ouml;&szlig;er als 0 sein.');
+INSERT INTO txt VALUES ('E5306', 'English', 'The context window must be greater than 0.');
+INSERT INTO txt VALUES ('E5307', 'German',  'Die max. Ausgabe-Tokens d&uuml;rfen nicht negativ sein und m&uuml;ssen kleiner als das Kontextfenster sein.');
+INSERT INTO txt VALUES ('E5307', 'English', 'The max. output tokens must not be negative and must be smaller than the context window.');
+INSERT INTO txt VALUES ('E5308', 'German',  'Die max. Modellanfragen pro Frage m&uuml;ssen mindestens 1 sein.');
+INSERT INTO txt VALUES ('E5308', 'English', 'The max. model requests per turn must be at least 1.');
+INSERT INTO txt VALUES ('E5309', 'German',  'Die max. Werkzeugfehler in Folge d&uuml;rfen nicht negativ sein.');
+INSERT INTO txt VALUES ('E5309', 'English', 'The max. consecutive tool errors must not be negative.');
+INSERT INTO txt VALUES ('E5310', 'German',  'Die Reserve f&uuml;r die Verlaufsverdichtung muss kleiner als das Kontextfenster und gr&ouml;&szlig;er als die max. Ausgabe-Tokens sein.');
+INSERT INTO txt VALUES ('E5310', 'English', 'The compaction reserve must be smaller than the context window and larger than the max. output tokens.');
 
 INSERT INTO txt VALUES ('E5401', 'German',  'Bitte das alte Passwort eintragen');
 INSERT INTO txt VALUES ('E5401', 'English', 'Please insert the old password');
@@ -5308,6 +5356,8 @@ INSERT INTO txt VALUES ('T0008', 'German',  '(f&uuml;r zuk&uuml;nftige Anwendung
 INSERT INTO txt VALUES ('T0008', 'English', '(for future use) users who can request firewall changes');
 INSERT INTO txt VALUES ('T0009', 'German',  '(f&uuml;r zuk&uuml;nftige Anwendung) Nutzer zum Anlegen von change request workflows');
 INSERT INTO txt VALUES ('T0009', 'English', '(for future use) users who can create change request workflows');
+INSERT INTO txt VALUES ('T0010', 'German',  'Technischer Nutzer des KI-Servers: liest nur die KI-Einstellungen und die darin gew&auml;hlten Zugangsdaten');
+INSERT INTO txt VALUES ('T0010', 'English', 'technical user of the AI server: reads only the AI settings and the credential they reference');
 INSERT INTO txt VALUES ('T0011', 'German',  'Nutzer mit vollem Zugriff auf den Firewall Orchestrator');
 INSERT INTO txt VALUES ('T0011', 'English', 'users with full access rights to firewall orchestrator');
 INSERT INTO txt VALUES ('T0012', 'German',  'Nutzer mit Berechtigung zum Rezertifizieren von Regeln');
@@ -7052,8 +7102,48 @@ INSERT INTO txt VALUES ('H5362', 'German',  'Workflow: requester, approver, plan
 INSERT INTO txt VALUES ('H5362', 'English', 'Workflow: requester, approver, planner, implementer, reviewer');
 INSERT INTO txt VALUES ('H5363', 'German',  '&Uuml;bergeordnete Rollen: admin, auditor, (anonymous)');
 INSERT INTO txt VALUES ('H5363', 'English', 'Superordinate roles: admin, auditor, (anonymous)');
-INSERT INTO txt VALUES ('H5364', 'German',  'Technische Rollen: importer, dbbackup, middleware-server');
-INSERT INTO txt VALUES ('H5364', 'English', 'Technical roles: importer, dbbackup, middleware-server');
+INSERT INTO txt VALUES ('H5364', 'German',  'Technische Rollen: importer, dbbackup, middleware-server, ai-harness');
+INSERT INTO txt VALUES ('H5364', 'English', 'Technical roles: importer, dbbackup, middleware-server, ai-harness');
+INSERT INTO txt VALUES ('H5370', 'German',  'Der KI-Assistent l&auml;uft auf dem KI-Server neben der Middleware.
+    Hier wird eingestellt, welchen KI-Anbieter und welches Modell er verwendet. Solange kein Anbieter gew&auml;hlt ist, sind die KI-Funktionen nicht verf&uuml;gbar.
+');
+INSERT INTO txt VALUES ('H5370', 'English', 'The AI assistant runs on the AI server next to the middleware.
+    These settings define which AI provider and model it uses. As long as no provider is selected, the AI functions are not available.
+');
+INSERT INTO txt VALUES ('H5371', 'German',  'KI-Anbieter: Ollama (meist ein lokaler Modellserver, ohne API-Schl&uuml;ssel), OpenAi (OpenAI oder ein OpenAI-kompatibler Server),
+    Anthropic (Claude) oder Google (Gemini). Keine(r/s) schaltet die KI-Funktionen ab.');
+INSERT INTO txt VALUES ('H5371', 'English', 'AI provider: Ollama (usually a local model server, no API key), OpenAi (OpenAI or an OpenAI compatible server),
+    Anthropic (Claude) or Google (Gemini). None switches the AI functions off.');
+INSERT INTO txt VALUES ('H5372', 'German',  'Modell: Name des Modells, wie ihn der Anbieter in seiner Dokumentation nennt. Pflichtfeld, sobald ein Anbieter gew&auml;hlt ist.');
+INSERT INTO txt VALUES ('H5372', 'English', 'Model: name of the model as the provider names it in its documentation. Required once a provider is selected.');
+INSERT INTO txt VALUES ('H5373', 'German',  'Endpunkt-URL: Optionale Basis-URL des Anbieters, z.B. eines OpenAI-kompatiblen Servers; leer f&uuml;r die Standard-URL des Anbieters
+    (bei Ollama http://localhost:11434). Wird ein API-Schl&uuml;ssel gesendet, muss sie https verwenden, au&szlig;er bei einer Loopback-Adresse.');
+INSERT INTO txt VALUES ('H5373', 'English', 'Endpoint URL: optional base URL of the provider, e.g. of an OpenAI compatible server; empty for the default URL of the provider
+    (for Ollama http://localhost:11434). If an API key is sent, it must use https unless it is a loopback address.');
+INSERT INTO txt VALUES ('H5374', 'German',  'Zugangsdaten: Die Zugangsdaten aus der <a href="/help/settings/credentials">Zugangsdatenverwaltung</a>, deren Passwort
+    der API-Schl&uuml;ssel des Anbieters ist (der Benutzername wird nicht verwendet). F&uuml;r alle Anbieter au&szlig;er Ollama erforderlich. Schl&uuml;sselpaare k&ouml;nnen nicht gew&auml;hlt werden.');
+INSERT INTO txt VALUES ('H5374', 'English', 'Credential: the credential from the <a href="/help/settings/credentials">credential management</a> whose secret
+    is the API key of the provider (the user name is not used). Required for all providers but Ollama. Key pairs cannot be selected.');
+INSERT INTO txt VALUES ('H5375', 'German',  'Kontextfenster: Gr&ouml;&szlig;e des Kontextfensters des Modells in Tokens, laut Dokumentation des Anbieters. Der Assistent fasst
+    &auml;ltere Teile eines Gespr&auml;chs zusammen, bevor es das Kontextfenster &uuml;berschreitet; Ollama erh&auml;lt den Wert als num_ctx. Pflichtfeld, sobald ein Anbieter gew&auml;hlt ist.');
+INSERT INTO txt VALUES ('H5375', 'English', 'Context window: size of the context window of the model in tokens, as documented by the provider. The assistant summarizes
+    older parts of a conversation before it exceeds the context window; Ollama gets the value as num_ctx. Required once a provider is selected.');
+INSERT INTO txt VALUES ('H5376', 'German',  'Max. Ausgabe-Tokens: Maximale L&auml;nge einer Antwort in Tokens; 0 f&uuml;r die Voreinstellung des Anbieters. Muss kleiner als das Kontextfenster sein.');
+INSERT INTO txt VALUES ('H5376', 'English', 'Max. output tokens: maximum length of an answer in tokens; 0 for the default of the provider. Must be smaller than the context window.');
+INSERT INTO txt VALUES ('H5377', 'German',  'Die folgenden Einstellungen begrenzen den Aufwand einer Frage an den Assistenten:');
+INSERT INTO txt VALUES ('H5377', 'English', 'The following settings bound the effort of a question to the assistant:');
+INSERT INTO txt VALUES ('H5378', 'German',  'Max. Modellanfragen pro Frage: Wie oft das Modell zu einer Frage aufgerufen wird, um Werkzeuge zu nutzen (mindestens 1, Voreinstellung 10).');
+INSERT INTO txt VALUES ('H5378', 'English', 'Max. model requests per turn: how often the model is called for one question to use tools (at least 1, default 10).');
+INSERT INTO txt VALUES ('H5379', 'German',  'Max. Werkzeugfehler in Folge: Nach so vielen fehlgeschlagenen Werkzeugaufrufen in Folge wird die Frage abgebrochen (Voreinstellung 3).');
+INSERT INTO txt VALUES ('H5379', 'English', 'Max. consecutive tool errors: after this many failed tool calls in a row the question is aborted (default 3).');
+INSERT INTO txt VALUES ('H5380', 'German',  'Reserve f&uuml;r Verlaufsverdichtung: Tokens des Kontextfensters, die f&uuml;r Anweisungen, Werkzeuge, neue Nachrichten und die Antwort frei bleiben;
+    &auml;ltere Teile des Gespr&auml;chs werden vorher zusammengefasst. 0 f&uuml;r ein Viertel des Kontextfensters. Muss kleiner als das Kontextfenster und gr&ouml;&szlig;er als die max. Ausgabe-Tokens sein.');
+INSERT INTO txt VALUES ('H5380', 'English', 'Compaction reserve: tokens of the context window kept free for instructions, tools, new messages and the answer;
+    older parts of the conversation are summarized before. 0 for a quarter of the context window. Must be smaller than the context window and larger than the max. output tokens.');
+INSERT INTO txt VALUES ('H5381', 'German',  'Der KI-Server liest die Einstellungen mit einem eigenen technischen Nutzer (Rolle ai-harness), der nur diese Einstellungen und die gew&auml;hlten
+    Zugangsdaten lesen darf, und &uuml;bernimmt &Auml;nderungen ohne Neustart nach sp&auml;testens 30 Sekunden. Hier gew&auml;hlte Zugangsdaten k&ouml;nnen nicht gel&ouml;scht werden.');
+INSERT INTO txt VALUES ('H5381', 'English', 'The AI server reads the settings with a technical user of its own (role ai-harness), which may only read these settings and the selected
+    credential, and applies changes without restart within 30 seconds. A credential selected here cannot be deleted.');
 INSERT INTO txt VALUES ('H5401', 'German',  'Der Admin kann verschiedene Standardwerte definieren, die dann f&uuml;r alle Nutzer gelten.<br>
     Manche von ihnen k&ouml;nnen in den individuellen Nutzereinstellungen &uuml;berschrieben werden.
 ');
@@ -7706,8 +7796,8 @@ INSERT INTO txt VALUES ('H5603', 'German',  'Server in Verbindung erlauben: Steu
 INSERT INTO txt VALUES ('H5603', 'English', 'Allow Servers in Connection: Controls, if App Servers are offered in the Library besides the App Roles for direct use in the connections.');
 INSERT INTO txt VALUES ('H5604', 'German',  'Einfache Dienste in Verbindung erlauben: Steuert, ob in der Bibliothek neben den Servicegruppen auch einfache Services zur direkten Verwendung in den Verbindungen angeboten werden.');
 INSERT INTO txt VALUES ('H5604', 'English', 'Allow Simple Services in Connection: Controls, if simple Services are offered in the Library besides the Service Groups for direct use in the connections.');
-INSERT INTO txt VALUES ('H5604a', 'German',  'KI-Pr&uuml;fung der Begr&uuml;ndung: Zeigt im Bearbeiten-Dialog von Verbindungen und Schnittstellen eine Schaltfl&auml;che, mit der die fachliche Begr&uuml;ndung bzw. Schnittstellenbeschreibung von einer KI bewertet werden kann. Daf&uuml;r muss der KI-Server (KI-Assistent) installiert und ein KI-Anbieter konfiguriert sein. Die Begr&uuml;ndung und die Elemente der Verbindung werden dabei an den konfigurierten KI-Anbieter gesendet. Standardm&auml;&szlig;ig deaktiviert.');
-INSERT INTO txt VALUES ('H5604a', 'English', 'AI Check of Reason: Shows a button in the edit dialog of connections and interfaces, with which the functional reason or interface description can be assessed by an AI. This requires the AI server (AI assistant) to be installed with a configured AI provider. The reason and the elements of the connection are sent to the configured AI provider. Deactivated by default.');
+INSERT INTO txt VALUES ('H5604a', 'German',  'KI-Pr&uuml;fung der Begr&uuml;ndung: Zeigt im Bearbeiten-Dialog von Verbindungen und Schnittstellen eine Schaltfl&auml;che, mit der die fachliche Begr&uuml;ndung bzw. Schnittstellenbeschreibung von einer KI bewertet werden kann. Daf&uuml;r muss der KI-Server (KI-Assistent) installiert und ein KI-Anbieter in den <a href="/help/settings/ai">KI-Einstellungen</a> konfiguriert sein. Die Begr&uuml;ndung und die Elemente der Verbindung werden dabei an den konfigurierten KI-Anbieter gesendet. Standardm&auml;&szlig;ig deaktiviert.');
+INSERT INTO txt VALUES ('H5604a', 'English', 'AI Check of Reason: Shows a button in the edit dialog of connections and interfaces, with which the functional reason or interface description can be assessed by an AI. This requires the AI server (AI assistant) to be installed with an AI provider configured in the <a href="/help/settings/ai">AI settings</a>. The reason and the elements of the connection are sent to the configured AI provider. Deactivated by default.');
 INSERT INTO txt VALUES ('H5605', 'German',  'Max. Anzahl Zeilen in &Uuml;bersicht: Definiert die Zeilenzahl innerhalb eines Eintrags in der &Uuml;bersichtstabelle der Verbindungen, ab der die Elemente eingeklappt dargestellt werden.
     Wird vom Administrator allgemein vorausgew&auml;hlt, kann aber vom Nutzer in den pers&ouml;nlichen Einstellungen &uuml;berschrieben werden.
 ');
