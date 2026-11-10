@@ -4,6 +4,7 @@
 - new AI MCP server (service `fworch-ai-mcp`, endpoint `/mcp` on the middleware host): offers FWO tools and prompts to MCP clients such as Claude Code or Codex, limited to what the roles of the calling user allow
 - new AI harness (service `fworch-ai-harness`, endpoint `/agui`): runs an AI agent (Ollama, OpenAI, Anthropic or Google) on the MCP tools over AG-UI with the rights of the calling user; tools that change data need the user's confirmation
 - both AI servers are installed by default on the middleware host; skip them with `install_ai_server=no`
+- the AI servers log to `/var/log/fworch/ai-mcp.log` and `/var/log/fworch/ai-harness.log`, rotated like the audit and alert logs
 - modelling: new button to let an AI assess the functional reason of a connection, an interface description or the reason of an interface usage (genuine, insufficient, not genuine), with questions to the requester and a proposal; activate it in the modelling settings (`modAiReasonCheck`)
 - new settings page `Settings > AI settings` (admin, auditor read-only) for AI provider, model, endpoint, API key and agent loop limits; replaces the environment variables `Harness__Provider__*` and `Harness__Agent__*`
 - the API key is stored as a credential; a credential the AI settings use cannot be deleted

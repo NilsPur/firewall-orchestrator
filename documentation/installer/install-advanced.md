@@ -214,6 +214,8 @@ variables (already set in inventory):
 product_name: fworch
 middleware_server_syslog_id: "{{ product_name }}.middleware-server"
 ui_syslog_id: "{{ product_name }}-ui"
+ai_mcp_syslog_id: "{{ product_name }}-ai-mcp"
+ai_harness_syslog_id: "{{ product_name }}-ai-harness"
 ldap_syslog_id: slapd
 ```
 rsyslog config
@@ -238,6 +240,8 @@ rsyslog config
           if $programname == '{{ ldap_syslog_id }}' then /var/log/{{ product_name }}/ldap.log
           if $programname == '{{ product_name }}-api' then /var/log/{{ product_name }}/api.log
           if $programname startswith '{{ product_name }}-import' then /var/log/{{ product_name }}/importer.log
+          if $programname == '{{ ai_mcp_syslog_id }}' then /var/log/{{ product_name }}/ai-mcp.log
+          if $programname == '{{ ai_harness_syslog_id }}' then /var/log/{{ product_name }}/ai-harness.log
           if $programname startswith '{{ product_name }}-' and $msg contains "Audit" then /var/log/{{ product_name }}/audit.log
         }
   - name: edit logrotate
@@ -272,6 +276,8 @@ api docu can then be accessed at <https://server/api_schema/index.html>
 Default value is install_ai_server=yes: the installer adds the MCP server (`roles/ai`), which offers FWO tools and prompts to AI clients. It is always installed on the middleware host, as its own service `fworch-ai-mcp` next to the middleware, and listens on the loopback interface only (port `ai_mcp_internal_port`, default 8890). AI clients reach it through the Apache endpoint of the middleware, under the path `/mcp`: `https://<middleware host>:8888/mcp` (port `middleware_web_listener_port`), with the same certificate as the middleware. It accepts the access tokens issued by the middleware, see [AI servers](../auth/README.md#ai-servers).
 
 With the same parameter, the installer adds the AI harness (`roles/ai`), which runs an AI agent on the tools of the MCP server and offers it to user interfaces over AG-UI. It is installed on the middleware host as well. It has its own service `fworch-ai-harness` and listens on the loopback interface only (port `ai_harness_internal_port`, default 8891) and is reached through the Apache endpoint of the middleware under the path `/agui`: `https://<middleware host>:8888/agui`. It accepts the same access tokens as the MCP server. The installer does not configure an AI provider (provider, model, API key): the harness starts without one, but every run fails until an admin sets one on the AI settings page of the UI (`Settings > AI settings`), with the API key stored as a credential in `Settings > Credentials`. The harness reads these settings with the technical LDAP user `ai-harness`, which the installer creates with a random password in `/usr/local/fworch/etc/secrets/ai_harness_pwd`; `ai_harness_settings_refresh_seconds` (default 30) sets how often it reads them.
+
+The MCP server logs to `/var/log/fworch/ai-mcp.log` and the AI harness to `/var/log/fworch/ai-harness.log` (with `install_syslog=yes`, otherwise see the sample rsyslog config above).
 
 run installation without the AI (MCP) server and the AI harness:
 ```console
